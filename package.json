@@ -1,0 +1,33 @@
+{
+    "name": "canvade",
+    "version": "0.0.0",
+    "description": "Engine for canvas based browser games",
+    "main": "dist/public-api.js",
+    "author": "tomiy",
+    "license": "ISC",
+    "scripts": {
+        "prepare": "husky",
+        "postinstall": "husky",
+        "build": "tsup",
+        "test": "vitest",
+        "coverage": "vitest run --coverage",
+        "format": "prettier --ignore-path .gitignore --write \"**/*.+(js|ts|json)\"",
+        "lint": "eslint ."
+    },
+    "devDependencies": {
+        "@commitlint/cli": "^19.8.1",
+        "@commitlint/config-conventional": "^19.8.1",
+        "@eslint/js": "^9.30.1",
+        "@typescript-eslint/eslint-plugin": "^8.35.1",
+        "@typescript-eslint/parser": "^8.35.1",
+        "eslint": "^9.30.1",
+        "eslint-config-prettier": "^10.1.5",
+        "globals": "^16.3.0",
+        "husky": "^9.1.7",
+        "prettier": "^3.6.2",
+        "tsup": "^8.5.0",
+        "typescript": "^5.8.3",
+        "typescript-eslint": "^8.35.1",
+        "vitest": "^3.2.4"
+    }
+}
