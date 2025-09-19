@@ -1,5 +1,5 @@
-import { StateManager } from "../public-api";
-import { DebugLevel, DebugUtils } from "./debug.utils";
+import { StateManager } from '../public-api';
+import { DebugLevel, DebugUtils } from './debug.utils';
 
 export type GameOptions = {
     updatesPerSecond: number;
@@ -7,9 +7,9 @@ export type GameOptions = {
 };
 
 const defaultOptions = {
-            debugLevel: DebugLevel.NONE,
-            updatesPerSecond: 50,
-        };
+    debugLevel: DebugLevel.NONE,
+    updatesPerSecond: 50,
+};
 
 export class Game {
     public canvas: HTMLCanvasElement;
@@ -21,10 +21,7 @@ export class Game {
 
     public stateManager: StateManager;
 
-    public constructor(
-        hostElement: HTMLElement,
-        options: Partial<GameOptions> = defaultOptions,
-    ) {
+    public constructor(hostElement: HTMLElement, options: Partial<GameOptions> = defaultOptions) {
         if (!document.createElement('canvas').getContext) {
             location.href = 'https://browsehappy.com/';
         }
@@ -35,10 +32,10 @@ export class Game {
         if (!ctx) {
             throw new Error('Cannot retrieve canvas context');
         }
-        
+
         this.canvas = canvas;
         this.ctx = ctx;
-        
+
         hostElement.appendChild(canvas);
 
         hostElement.addEventListener('resize', () => this.setCanvasSize());
@@ -72,7 +69,7 @@ export class Game {
     }
 
     protected postInit(options: GameOptions): void {
-        DebugUtils.debug(options);
+        DebugUtils.trace(options);
     }
 
     public run(): void {

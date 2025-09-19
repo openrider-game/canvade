@@ -3,8 +3,9 @@ export enum DebugLevel {
     ERROR = 1,
     WARNING = 2,
     MESSAGE = 3,
-    DEBUG = 4
-};
+    DEBUG = 4,
+    TRACE = 5,
+}
 
 export abstract class DebugUtils {
     private static debugLevel: DebugLevel = DebugLevel.NONE;
@@ -25,9 +26,13 @@ export abstract class DebugUtils {
         this.log(DebugLevel.DEBUG, messages);
     }
 
+    public static trace(messages: unknown) {
+        this.log(DebugLevel.TRACE, messages);
+    }
+
     private static log(debugLevel: DebugLevel, messages: unknown) {
         if (this.debugLevel >= debugLevel) {
-            switch(debugLevel) {
+            switch (debugLevel) {
                 case DebugLevel.ERROR:
                     console.error(messages);
                     break;

@@ -1,7 +1,7 @@
-import { EventHandler } from "../core/event-handler.interface";
-import { LifeCycleFunctions } from "../core/lifecycle-functions.interface";
-import { Layer } from "./layer/layer";
-import { StateManager } from "./state-manager";
+import { EventHandler } from '../core/event-handler.interface';
+import { LifeCycleFunctions } from '../core/lifecycle-functions.interface';
+import { Layer } from './layer/layer';
+import { StateManager } from './state-manager';
 
 export abstract class State implements LifeCycleFunctions, EventHandler {
     public manager: StateManager;
@@ -97,11 +97,11 @@ export abstract class State implements LifeCycleFunctions, EventHandler {
         this.layerStack.forEach((layer) => layer.onKeyUp(e));
     }
 
-    public onKeyboardDown(e: CustomEventInit): void {
+    public onKeyboardDown(e: CustomEventInit<string>): void {
         this.layerStack.forEach((layer) => layer.onKeyboardDown(e));
     }
 
-    public onKeyboardUp(e: CustomEventInit): void {
+    public onKeyboardUp(e: CustomEventInit<string>): void {
         this.layerStack.forEach((layer) => layer.onKeyboardUp(e));
     }
 

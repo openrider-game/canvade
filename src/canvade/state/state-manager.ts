@@ -1,5 +1,5 @@
-import { LifeCycleFunctions } from "../core/lifecycle-functions.interface";
-import { State } from "./state";
+import { LifeCycleFunctions } from '../core/lifecycle-functions.interface';
+import { State } from './state';
 
 export class StateManager implements LifeCycleFunctions {
     private states: Map<string, State>;
