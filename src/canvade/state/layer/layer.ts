@@ -1,65 +1,102 @@
-import { EventHandler } from '../../core/event-handler.interface';
 import { LifeCycleFunctions } from '../../core/lifecycle-functions.interface';
 import { DebugUtils } from '../../debug.utils';
+import { EventEmitter } from '../../event/event-emitter';
 import { State } from '../state';
 
-export abstract class Layer implements LifeCycleFunctions, EventHandler {
+type LayerEvents = {
+    enter: undefined;
+    leave: undefined;
+    mouseDown: MouseEvent;
+    mouseUp: MouseEvent;
+    mouseMove: MouseEvent;
+    scroll: WheelEvent;
+    mouseEnter: MouseEvent;
+    mouseOut: MouseEvent;
+    contextMenu: MouseEvent;
+    visibilityChange: undefined;
+    keyDown: KeyboardEvent;
+    keyUp: KeyboardEvent;
+};
+
+export abstract class Layer extends EventEmitter<LayerEvents> implements LifeCycleFunctions {
     public state: State;
 
+    public targeted: boolean = false;
+
     public constructor(state: State) {
+        super();
+
         this.state = state;
+
+        this.subscribe('enter', this.onEnter);
+        this.subscribe('leave', this.onLeave);
+        this.subscribe('mouseDown', this.onMouseDown);
+        this.subscribe('mouseUp', this.onMouseUp);
+        this.subscribe('mouseMove', this.onMouseMove);
+        this.subscribe('scroll', this.onScroll);
+        this.subscribe('mouseEnter', this.onMouseEnter);
+        this.subscribe('mouseOut', this.onMouseOut);
+        this.subscribe('contextMenu', this.onContextMenu);
+        this.subscribe('visibilityChange', this.onVisibilityChange);
+        this.subscribe('keyDown', this.onKeyDown);
+        this.subscribe('keyUp', this.onKeyUp);
     }
 
-    public onEnter(): void {}
-    public onLeave(): void {}
+    private onEnter(): void {}
+    private onLeave(): void {}
 
-    public onMouseDown(e: MouseEvent): boolean {
+    private onMouseDown(e: MouseEvent): boolean {
         DebugUtils.trace(e);
+        this.targeted = true;
         return true;
     }
 
-    public onMouseUp(e: MouseEvent): boolean {
+    private onMouseUp(e: MouseEvent): boolean {
         DebugUtils.trace(e);
+        this.targeted = true;
         return true;
     }
 
-    public onMouseMove(e: MouseEvent): boolean {
+    private onMouseMove(e: MouseEvent): boolean {
         DebugUtils.trace(e);
+        this.targeted = true;
         return true;
     }
 
-    public onScroll(e: WheelEvent): boolean {
+    private onScroll(e: WheelEvent): boolean {
         DebugUtils.trace(e);
+        this.targeted = true;
         return true;
     }
 
-    public onMouseEnter(e: MouseEvent): void {
+    private onMouseEnter(e: MouseEvent): void {
         DebugUtils.trace(e);
     }
-    public onMouseOut(e: MouseEvent): void {
+    private onMouseOut(e: MouseEvent): void {
         DebugUtils.trace(e);
     }
 
-    public onContextMenu(e: MouseEvent): boolean {
+    private onContextMenu(e: MouseEvent): boolean {
         DebugUtils.trace(e);
+        this.targeted = true;
         return true;
     }
 
-    public onVisibilityChange(): void {}
+    private onVisibilityChange(): void {}
 
-    public onKeyDown(e: KeyboardEvent): void {
+    private onKeyDown(e: KeyboardEvent): void {
         DebugUtils.trace(e);
     }
 
-    public onKeyUp(e: KeyboardEvent): void {
+    private onKeyUp(e: KeyboardEvent): void {
         DebugUtils.trace(e);
     }
 
-    public onKeyboardDown(e: CustomEventInit<string>): void {
+    private onKeyboardDown(e: CustomEventInit<string>): void {
         DebugUtils.trace(e);
     }
 
-    public onKeyboardUp(e: CustomEventInit<string>): void {
+    private onKeyboardUp(e: CustomEventInit<string>): void {
         DebugUtils.trace(e);
     }
 

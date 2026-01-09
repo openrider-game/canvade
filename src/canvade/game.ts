@@ -1,5 +1,6 @@
-import { StateManager } from '../public-api';
 import { DebugLevel, DebugUtils } from './debug.utils';
+import { State, StateClass } from './state/state';
+import { StateManager } from './state/state-manager';
 
 export type GameOptions = {
     updatesPerSecond: number;
@@ -19,7 +20,7 @@ export class Game {
     private lastTime: number;
     private progress: number;
 
-    public stateManager: StateManager;
+    private stateManager: StateManager;
 
     public constructor(hostElement: HTMLElement, options: Partial<GameOptions> = defaultOptions) {
         if (!document.createElement('canvas').getContext) {
@@ -50,6 +51,8 @@ export class Game {
 
         this.stateManager = new StateManager();
 
+        this.bridgeDOMEvents();
+
         DebugUtils.setDebugLevel(mergedOptions.debugLevel);
 
         this.postInit(mergedOptions);
@@ -70,6 +73,33 @@ export class Game {
 
     protected postInit(options: GameOptions): void {
         DebugUtils.trace(options);
+    }
+
+    public addStates(states: Map<string, StateClass<State>>): void {
+        for (const [name, state] of states) {
+            this.stateManager.addState(state, name);
+        }
+    }
+
+    public pushState(name: string) {
+        this.stateManager.push(name);
+    }
+
+    private bridgeDOMEvents(): void {
+        this.canvas.addEventListener('mousedown', (e) => this.stateManager.getCurrent()?.dispatch('mouseDown', e));
+        this.canvas.addEventListener('mouseup', (e) => this.stateManager.getCurrent()?.dispatch('mouseUp', e));
+        this.canvas.addEventListener('mousemove', (e) => this.stateManager.getCurrent()?.dispatch('mouseMove', e));
+        this.canvas.addEventListener('wheel', (e) => this.stateManager.getCurrent()?.dispatch('scroll', e));
+
+        this.canvas.addEventListener('mouseenter', (e) => this.stateManager.getCurrent()?.dispatch('mouseEnter', e));
+        this.canvas.addEventListener('mouseout', (e) => this.stateManager.getCurrent()?.dispatch('mouseOut', e));
+
+        this.canvas.addEventListener('contextmenu', (e) => this.stateManager.getCurrent()?.dispatch('contextMenu', e));
+
+        document.addEventListener('visibilitychange', () => this.stateManager.getCurrent()?.dispatch('visibilityChange'));
+
+        document.addEventListener('keydown', (e) => this.stateManager.getCurrent()?.dispatch('keyDown', e));
+        document.addEventListener('keyup', (e) => this.stateManager.getCurrent()?.dispatch('keyUp', e));
     }
 
     public run(): void {

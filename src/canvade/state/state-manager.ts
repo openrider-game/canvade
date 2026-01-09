@@ -1,5 +1,5 @@
 import { LifeCycleFunctions } from '../core/lifecycle-functions.interface';
-import { State } from './state';
+import { State, StateClass } from './state';
 
 export class StateManager implements LifeCycleFunctions {
     private states: Map<string, State>;
@@ -14,24 +14,24 @@ export class StateManager implements LifeCycleFunctions {
         const state = this.getState(name);
 
         if (state) {
-            state.onEnter();
-            this.getCurrent()?.onLeave();
+            state.dispatch('enter');
+            this.getCurrent()?.dispatch('leave');
             this.stateStack.push(state);
         }
     }
 
     public pop(): State | null | undefined {
         if (this.stateStack.length) {
-            this.getCurrent()?.onLeave();
+            this.getCurrent()?.dispatch('leave');
             const poppedState = this.stateStack.pop();
-            this.getCurrent()?.onEnter();
+            this.getCurrent()?.dispatch('enter');
             return poppedState;
         }
 
         return null;
     }
 
-    public addState<T extends State>(stateClass: new (x: StateManager) => T, name: string): void {
+    public addState<T extends State>(stateClass: StateClass<T>, name: string): void {
         const state = new stateClass(this);
         this.states.set(name, state);
     }
