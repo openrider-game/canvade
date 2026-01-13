@@ -1,4 +1,5 @@
 import { DebugLevel, DebugUtils } from './debug.utils';
+import { EventManager } from './event/event-manager';
 import { State, StateClass } from './state/state';
 import { StateManager } from './state/state-manager';
 
@@ -21,6 +22,7 @@ export class Game {
     private progress: number;
 
     private stateManager: StateManager;
+    private eventManager: EventManager;
 
     public constructor(hostElement: HTMLElement, options: Partial<GameOptions> = defaultOptions) {
         if (!document.createElement('canvas').getContext) {
@@ -50,8 +52,9 @@ export class Game {
         this.progress = 0;
 
         this.stateManager = new StateManager();
+        this.eventManager = new EventManager(canvas, this.stateManager);
 
-        this.bridgeDOMEvents();
+        this.eventManager.bridgeDOMEvents();
 
         DebugUtils.setDebugLevel(mergedOptions.debugLevel);
 
@@ -83,23 +86,6 @@ export class Game {
 
     public pushState(name: string) {
         this.stateManager.push(name);
-    }
-
-    private bridgeDOMEvents(): void {
-        this.canvas.addEventListener('mousedown', (e) => this.stateManager.getCurrent()?.dispatch('mouseDown', e));
-        this.canvas.addEventListener('mouseup', (e) => this.stateManager.getCurrent()?.dispatch('mouseUp', e));
-        this.canvas.addEventListener('mousemove', (e) => this.stateManager.getCurrent()?.dispatch('mouseMove', e));
-        this.canvas.addEventListener('wheel', (e) => this.stateManager.getCurrent()?.dispatch('scroll', e));
-
-        this.canvas.addEventListener('mouseenter', (e) => this.stateManager.getCurrent()?.dispatch('mouseEnter', e));
-        this.canvas.addEventListener('mouseout', (e) => this.stateManager.getCurrent()?.dispatch('mouseOut', e));
-
-        this.canvas.addEventListener('contextmenu', (e) => this.stateManager.getCurrent()?.dispatch('contextMenu', e));
-
-        document.addEventListener('visibilitychange', () => this.stateManager.getCurrent()?.dispatch('visibilityChange'));
-
-        document.addEventListener('keydown', (e) => this.stateManager.getCurrent()?.dispatch('keyDown', e));
-        document.addEventListener('keyup', (e) => this.stateManager.getCurrent()?.dispatch('keyUp', e));
     }
 
     public run(): void {

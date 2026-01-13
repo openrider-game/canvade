@@ -1,5 +1,6 @@
 import { LifeCycleFunctions } from '../core/lifecycle-functions.interface';
 import { EventEmitter } from '../event/event-emitter';
+import { GameKeyboardEvent, GameMouseEvent } from '../event/event-factory';
 import { Layer } from './layer/layer';
 import { StateManager } from './state-manager';
 
@@ -8,16 +9,18 @@ export type StateClass<T extends State> = new (manager: StateManager) => T;
 type StateEvents = {
     enter: undefined;
     leave: undefined;
-    mouseDown: MouseEvent;
-    mouseUp: MouseEvent;
-    mouseMove: MouseEvent;
+    mouseDown: CustomEvent<GameMouseEvent>;
+    mouseUp: CustomEvent<GameMouseEvent>;
+    mouseMove: CustomEvent<GameMouseEvent>;
     scroll: WheelEvent;
-    mouseEnter: MouseEvent;
-    mouseOut: MouseEvent;
-    contextMenu: MouseEvent;
+    mouseEnter: CustomEvent<GameMouseEvent>;
+    mouseOut: CustomEvent<GameMouseEvent>;
+    contextMenu: CustomEvent<GameMouseEvent>;
     visibilityChange: undefined;
-    keyDown: KeyboardEvent;
-    keyUp: KeyboardEvent;
+    keyDown: CustomEvent<GameKeyboardEvent>;
+    keyUp: CustomEvent<GameKeyboardEvent>;
+    keyboardUp: CustomEvent<GameKeyboardEvent>;
+    keyboardDown: CustomEvent<GameKeyboardEvent>;
 };
 
 export abstract class State extends EventEmitter<StateEvents> implements LifeCycleFunctions {
@@ -47,19 +50,21 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
         this.subscribe('visibilityChange', this.onVisibilityChange);
         this.subscribe('keyDown', this.onKeyDown);
         this.subscribe('keyUp', this.onKeyUp);
+        this.subscribe('keyboardDown', this.onKeyboardDown);
+        this.subscribe('keyboardUp', this.onKeyboardUp);
     }
 
     protected abstract initLayers(): Map<string, Layer>;
 
-    private onEnter(): void {
+    protected onEnter(): void {
         this.layerStack.forEach((layer) => layer.dispatch('enter'));
     }
 
-    private onLeave(): void {
+    protected onLeave(): void {
         this.layerStack.forEach((layer) => layer.dispatch('leave'));
     }
 
-    private onMouseDown(e: MouseEvent): boolean {
+    protected onMouseDown(e: CustomEvent<GameMouseEvent>): boolean {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
             this.layerStack[i].targeted = false;
 
@@ -73,7 +78,7 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
         return true;
     }
 
-    private onMouseUp(e: MouseEvent): boolean {
+    protected onMouseUp(e: CustomEvent<GameMouseEvent>): boolean {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
             this.layerStack[i].targeted = false;
 
@@ -87,7 +92,7 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
         return true;
     }
 
-    private onMouseMove(e: MouseEvent): boolean {
+    protected onMouseMove(e: CustomEvent<GameMouseEvent>): boolean {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
             this.layerStack[i].targeted = false;
 
@@ -101,7 +106,7 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
         return true;
     }
 
-    private onScroll(e: WheelEvent): boolean {
+    protected onScroll(e: WheelEvent): boolean {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
             this.layerStack[i].targeted = false;
 
@@ -115,15 +120,15 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
         return true;
     }
 
-    private onMouseEnter(e: MouseEvent): void {
+    protected onMouseEnter(e: CustomEvent<GameMouseEvent>): void {
         this.layerStack.forEach((layer) => layer.dispatch('mouseEnter', e));
     }
 
-    private onMouseOut(e: MouseEvent): void {
+    protected onMouseOut(e: CustomEvent<GameMouseEvent>): void {
         this.layerStack.forEach((layer) => layer.dispatch('mouseOut', e));
     }
 
-    private onContextMenu(e: MouseEvent): boolean {
+    protected onContextMenu(e: CustomEvent<GameMouseEvent>): boolean {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
             this.layerStack[i].targeted = false;
 
@@ -137,25 +142,25 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
         return true;
     }
 
-    private onVisibilityChange(): void {
+    protected onVisibilityChange(): void {
         this.layerStack.forEach((layer) => layer.dispatch('visibilityChange'));
     }
 
-    private onKeyDown(e: KeyboardEvent): void {
+    protected onKeyDown(e: CustomEvent<GameKeyboardEvent>): void {
         this.layerStack.forEach((layer) => layer.dispatch('keyDown', e));
     }
 
-    private onKeyUp(e: KeyboardEvent): void {
+    protected onKeyUp(e: CustomEvent<GameKeyboardEvent>): void {
         this.layerStack.forEach((layer) => layer.dispatch('keyUp', e));
     }
 
-    // private onKeyboardDown(e: CustomEventInit<string>): void {
-    // this.layerStack.forEach((layer) => layer.dispatch('keyboardDown', (e));
-    // }
+    protected onKeyboardDown(e: CustomEvent<GameKeyboardEvent>): void {
+        this.layerStack.forEach((layer) => layer.dispatch('keyboardDown', e));
+    }
 
-    // private onKeyboardUp(e: CustomEventInit<string>): void {
-    // this.layerStack.forEach((layer) => layer.dispatch('keyboardUp', (e));
-    // }
+    protected onKeyboardUp(e: CustomEvent<GameKeyboardEvent>): void {
+        this.layerStack.forEach((layer) => layer.dispatch('keyboardUp', e));
+    }
 
     public fixedUpdate(): void {
         this.layerStack.forEach((layer) => layer.fixedUpdate());

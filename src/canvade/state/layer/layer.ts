@@ -1,21 +1,24 @@
 import { LifeCycleFunctions } from '../../core/lifecycle-functions.interface';
 import { DebugUtils } from '../../debug.utils';
 import { EventEmitter } from '../../event/event-emitter';
+import { GameKeyboardEvent, GameMouseEvent } from '../../event/event-factory';
 import { State } from '../state';
 
 type LayerEvents = {
     enter: undefined;
     leave: undefined;
-    mouseDown: MouseEvent;
-    mouseUp: MouseEvent;
-    mouseMove: MouseEvent;
+    mouseDown: CustomEvent<GameMouseEvent>;
+    mouseUp: CustomEvent<GameMouseEvent>;
+    mouseMove: CustomEvent<GameMouseEvent>;
     scroll: WheelEvent;
-    mouseEnter: MouseEvent;
-    mouseOut: MouseEvent;
-    contextMenu: MouseEvent;
+    mouseEnter: CustomEvent<GameMouseEvent>;
+    mouseOut: CustomEvent<GameMouseEvent>;
+    contextMenu: CustomEvent<GameMouseEvent>;
     visibilityChange: undefined;
-    keyDown: KeyboardEvent;
-    keyUp: KeyboardEvent;
+    keyDown: CustomEvent<GameKeyboardEvent>;
+    keyUp: CustomEvent<GameKeyboardEvent>;
+    keyboardDown: CustomEvent<GameKeyboardEvent>;
+    keyboardUp: CustomEvent<GameKeyboardEvent>;
 };
 
 export abstract class Layer extends EventEmitter<LayerEvents> implements LifeCycleFunctions {
@@ -40,71 +43,72 @@ export abstract class Layer extends EventEmitter<LayerEvents> implements LifeCyc
         this.subscribe('visibilityChange', this.onVisibilityChange);
         this.subscribe('keyDown', this.onKeyDown);
         this.subscribe('keyUp', this.onKeyUp);
+        this.subscribe('keyboardDown', this.onKeyboardDown);
+        this.subscribe('keyboardUp', this.onKeyboardUp);
     }
 
-    private onEnter(): void {}
-    private onLeave(): void {}
+    protected onEnter(): void {}
+    protected onLeave(): void {}
 
-    private onMouseDown(e: MouseEvent): boolean {
+    protected onMouseDown(e: CustomEvent<GameMouseEvent>): boolean {
         DebugUtils.trace(e);
         this.targeted = true;
         return true;
     }
 
-    private onMouseUp(e: MouseEvent): boolean {
+    protected onMouseUp(e: CustomEvent<GameMouseEvent>): boolean {
         DebugUtils.trace(e);
         this.targeted = true;
         return true;
     }
 
-    private onMouseMove(e: MouseEvent): boolean {
+    protected onMouseMove(e: CustomEvent<GameMouseEvent>): boolean {
         DebugUtils.trace(e);
         this.targeted = true;
         return true;
     }
 
-    private onScroll(e: WheelEvent): boolean {
+    protected onScroll(e: WheelEvent): boolean {
         DebugUtils.trace(e);
         this.targeted = true;
         return true;
     }
 
-    private onMouseEnter(e: MouseEvent): void {
+    protected onMouseEnter(e: CustomEvent<GameMouseEvent>): void {
         DebugUtils.trace(e);
     }
-    private onMouseOut(e: MouseEvent): void {
+    protected onMouseOut(e: CustomEvent<GameMouseEvent>): void {
         DebugUtils.trace(e);
     }
 
-    private onContextMenu(e: MouseEvent): boolean {
+    protected onContextMenu(e: CustomEvent<GameMouseEvent>): boolean {
         DebugUtils.trace(e);
         this.targeted = true;
         return true;
     }
 
-    private onVisibilityChange(): void {}
+    protected onVisibilityChange(): void {}
 
-    private onKeyDown(e: KeyboardEvent): void {
+    protected onKeyDown(e: CustomEvent<GameKeyboardEvent>): void {
         DebugUtils.trace(e);
     }
 
-    private onKeyUp(e: KeyboardEvent): void {
+    protected onKeyUp(e: CustomEvent<GameKeyboardEvent>): void {
         DebugUtils.trace(e);
     }
 
-    private onKeyboardDown(e: CustomEventInit<string>): void {
+    protected onKeyboardDown(e: CustomEvent<GameKeyboardEvent>): void {
         DebugUtils.trace(e);
     }
 
-    private onKeyboardUp(e: CustomEventInit<string>): void {
+    protected onKeyboardUp(e: CustomEvent<GameKeyboardEvent>): void {
         DebugUtils.trace(e);
     }
 
     public fixedUpdate() {}
 
     public update(progress: number, delta: number) {
-        DebugUtils.trace(progress);
-        DebugUtils.trace(delta);
+        DebugUtils.trace(progress, delta);
     }
 
     public abstract render(ctx: CanvasRenderingContext2D): void;
