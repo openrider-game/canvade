@@ -1,4 +1,5 @@
 import { LifeCycleFunctions } from '../core/lifecycle-functions.interface';
+import { EventFactory } from '../event/event-factory';
 import { State, StateClass } from './state';
 
 export class StateManager implements LifeCycleFunctions {
@@ -32,7 +33,7 @@ export class StateManager implements LifeCycleFunctions {
     }
 
     public addState<T extends State>(stateClass: StateClass<T>, name: string): void {
-        const state = new stateClass(this);
+        const state = new stateClass();
         this.states.set(name, state);
     }
 
@@ -42,19 +43,32 @@ export class StateManager implements LifeCycleFunctions {
 
     public fixedUpdate(): void {
         if (this.stateStack.length) {
-            this.getCurrent()?.fixedUpdate();
+            this.getCurrent()?.dispatch('fixedUpdate');
         }
     }
 
     public update(progress: number, delta: number): void {
         if (this.stateStack.length) {
-            this.getCurrent()?.update(progress, delta);
+            const updateEvent = EventFactory.createGameEvent({
+                name: 'update',
+                propagationStopped: false,
+                progress,
+                delta,
+            });
+
+            this.getCurrent()?.dispatch('update', updateEvent);
         }
     }
 
     public render(ctx: CanvasRenderingContext2D): void {
         if (this.stateStack.length) {
-            this.getCurrent()?.render(ctx);
+            const renderEvent = EventFactory.createGameEvent({
+                name: 'render',
+                propagationStopped: false,
+                ctx,
+            });
+
+            this.getCurrent()?.dispatch('render', renderEvent);
         }
     }
 

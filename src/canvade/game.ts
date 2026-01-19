@@ -52,9 +52,9 @@ export class Game {
         this.progress = 0;
 
         this.stateManager = new StateManager();
-        this.eventManager = new EventManager(canvas, this.stateManager);
+        this.eventManager = new EventManager(ctx);
 
-        this.eventManager.bridgeDOMEvents();
+        this.eventManager.bridgeDOMEvents(this.stateManager);
 
         DebugUtils.setDebugLevel(mergedOptions.debugLevel);
 

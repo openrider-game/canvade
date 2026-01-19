@@ -2,13 +2,10 @@ import { Cloneable } from '../cloneable.interface';
 import { Serializable } from '../serializable.interface';
 
 export default class Vector implements Cloneable<Vector>, Serializable {
-    public x: number;
-    public y: number;
-
-    public constructor(x: number = 0, y: number = 0) {
-        this.x = x;
-        this.y = y;
-    }
+    public constructor(
+        public x: number = 0,
+        public y: number = 0,
+    ) {}
 
     public set(vector: Vector): Vector {
         this.x = vector.x;

@@ -1,10 +1,15 @@
-import { LifeCycleFunctions } from '../core/lifecycle-functions.interface';
 import { EventEmitter } from '../event/event-emitter';
-import { GameKeyboardEvent, GameMouseEvent } from '../event/event-factory';
+import {
+    GameKeyboardEvent,
+    GameMouseEvent,
+    GameRenderEvent,
+    GameUpdateEvent,
+    GameWheelEvent,
+} from '../event/event-factory';
+import { World } from '../world/world';
 import { Layer } from './layer/layer';
-import { StateManager } from './state-manager';
 
-export type StateClass<T extends State> = new (manager: StateManager) => T;
+export type StateClass<T extends State> = new () => T;
 
 type StateEvents = {
     enter: undefined;
@@ -12,7 +17,7 @@ type StateEvents = {
     mouseDown: CustomEvent<GameMouseEvent>;
     mouseUp: CustomEvent<GameMouseEvent>;
     mouseMove: CustomEvent<GameMouseEvent>;
-    scroll: WheelEvent;
+    scroll: CustomEvent<GameWheelEvent>;
     mouseEnter: CustomEvent<GameMouseEvent>;
     mouseOut: CustomEvent<GameMouseEvent>;
     contextMenu: CustomEvent<GameMouseEvent>;
@@ -21,23 +26,30 @@ type StateEvents = {
     keyUp: CustomEvent<GameKeyboardEvent>;
     keyboardUp: CustomEvent<GameKeyboardEvent>;
     keyboardDown: CustomEvent<GameKeyboardEvent>;
+    fixedUpdate: undefined;
+    update: CustomEvent<GameUpdateEvent>;
+    render: CustomEvent<GameRenderEvent>;
 };
 
-export abstract class State extends EventEmitter<StateEvents> implements LifeCycleFunctions {
-    public manager: StateManager;
+export abstract class State extends EventEmitter<StateEvents> {
     public layers: Map<string, Layer>;
     protected layerStack: Layer[];
 
-    public constructor(manager: StateManager) {
-        super();
+    private world?: World;
 
-        this.manager = manager;
+    public constructor() {
+        super();
 
         this.layerStack = [];
 
+        this.defaultInit();
+        this.initState();
+
         this.layers = this.initLayers();
         this.layerStack.push(...this.layers.values());
+    }
 
+    private defaultInit(): void {
         this.subscribe('enter', this.onEnter);
         this.subscribe('leave', this.onLeave);
         this.subscribe('mouseDown', this.onMouseDown);
@@ -52,9 +64,21 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
         this.subscribe('keyUp', this.onKeyUp);
         this.subscribe('keyboardDown', this.onKeyboardDown);
         this.subscribe('keyboardUp', this.onKeyboardUp);
+        this.subscribe('fixedUpdate', this.onFixedUpdate);
+        this.subscribe('update', this.onUpdate);
+        this.subscribe('render', this.onRender);
     }
 
+    protected abstract initState(): void;
     protected abstract initLayers(): Map<string, Layer>;
+
+    public setWorld(world: World): void {
+        this.world = world;
+    }
+
+    public getWorld(): World | undefined {
+        return this.world;
+    }
 
     protected onEnter(): void {
         this.layerStack.forEach((layer) => layer.dispatch('enter'));
@@ -66,11 +90,9 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
 
     protected onMouseDown(e: CustomEvent<GameMouseEvent>): boolean {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
-            this.layerStack[i].targeted = false;
-
             this.layerStack[i].dispatch('mouseDown', e);
 
-            if (this.layerStack[i].targeted) {
+            if (e.detail.propagationStopped) {
                 break;
             }
         }
@@ -80,11 +102,9 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
 
     protected onMouseUp(e: CustomEvent<GameMouseEvent>): boolean {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
-            this.layerStack[i].targeted = false;
-
             this.layerStack[i].dispatch('mouseUp', e);
 
-            if (this.layerStack[i].targeted) {
+            if (e.detail.propagationStopped) {
                 break;
             }
         }
@@ -94,11 +114,9 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
 
     protected onMouseMove(e: CustomEvent<GameMouseEvent>): boolean {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
-            this.layerStack[i].targeted = false;
-
             this.layerStack[i].dispatch('mouseMove', e);
 
-            if (this.layerStack[i].targeted) {
+            if (e.detail.propagationStopped) {
                 break;
             }
         }
@@ -106,13 +124,11 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
         return true;
     }
 
-    protected onScroll(e: WheelEvent): boolean {
+    protected onScroll(e: CustomEvent<GameWheelEvent>): boolean {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
-            this.layerStack[i].targeted = false;
-
             this.layerStack[i].dispatch('scroll', e);
 
-            if (this.layerStack[i].targeted) {
+            if (e.detail.propagationStopped) {
                 break;
             }
         }
@@ -130,11 +146,9 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
 
     protected onContextMenu(e: CustomEvent<GameMouseEvent>): boolean {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
-            this.layerStack[i].targeted = false;
-
             this.layerStack[i].dispatch('contextMenu', e);
 
-            if (this.layerStack[i].targeted) {
+            if (e.detail.propagationStopped) {
                 break;
             }
         }
@@ -162,17 +176,18 @@ export abstract class State extends EventEmitter<StateEvents> implements LifeCyc
         this.layerStack.forEach((layer) => layer.dispatch('keyboardUp', e));
     }
 
-    public fixedUpdate(): void {
-        this.layerStack.forEach((layer) => layer.fixedUpdate());
+    private onFixedUpdate(): void {
+        this.layerStack.forEach((layer) => layer.dispatch('fixedUpdate'));
     }
 
-    public update(progress: number, delta: number): void {
-        this.layerStack.forEach((layer) => layer.update(progress, delta));
+    private onUpdate(e: CustomEvent<GameUpdateEvent>): void {
+        this.layerStack.forEach((layer) => layer.dispatch('update', e));
     }
 
-    public render(ctx: CanvasRenderingContext2D): void {
+    private onRender(e: CustomEvent<GameRenderEvent>): void {
+        const ctx = e.detail.ctx;
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-        this.layerStack.forEach((layer) => layer.render(ctx));
+        this.layerStack.forEach((layer) => layer.dispatch('render', e));
     }
 }

@@ -2,27 +2,26 @@ import Vector from '../core/math/vector';
 import { WorldVector } from './world-vector';
 
 export abstract class World {
-    public camera: Vector;
-    public zoomFactor: number;
-
-    constructor() {
-        this.camera = new Vector();
-        this.zoomFactor = 1;
-    }
+    constructor(
+        public camera: Vector = new Vector(),
+        public zoomFactor: number = 0.6,
+    ) {}
 
     public zoom(
-        ctx: CanvasRenderingContext2D,
         pos: Vector,
         direction: number,
-        min: number,
-        max: number,
+        viewWidth: number,
+        viewHeight: number,
+        min: number = 0.2,
+        max: number = 4,
+        step: number = 0.2,
     ) {
-        const px = WorldVector.toPixel(ctx, this, pos);
+        const px = WorldVector.toPixel(pos, this, viewWidth, viewHeight);
         this.zoomFactor = Math.min(
             max,
-            Math.max(min, Math.round((this.zoomFactor + 0.2 * direction) * 100) / 100),
+            Math.max(min, Math.round((this.zoomFactor + step * direction) * 100) / 100),
         );
-        this.camera.x = pos.x - (px.x - ctx.canvas.width / 2) / this.zoomFactor;
-        this.camera.y = pos.y - (px.y - ctx.canvas.height / 2) / this.zoomFactor;
+        this.camera.x = pos.x - (px.x - viewWidth / 2) / this.zoomFactor;
+        this.camera.y = pos.y - (px.y - viewHeight / 2) / this.zoomFactor;
     }
 }

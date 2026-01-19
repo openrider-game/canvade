@@ -3,20 +3,26 @@ import { World } from './world';
 
 export abstract class WorldVector {
     public static normalizeToCanvas(
-        ctx: CanvasRenderingContext2D,
-        world: World,
         vec: Vector,
+        world: World,
+        viewWidth: number,
+        viewHeight: number,
     ): Vector {
         return new Vector(
-            (vec.x - ctx.canvas.width / 2) / world.zoomFactor + world.camera.x,
-            (vec.y - ctx.canvas.height / 2) / world.zoomFactor + world.camera.y,
+            (vec.x - viewWidth / 2) / world.zoomFactor + world.camera.x,
+            (vec.y - viewHeight / 2) / world.zoomFactor + world.camera.y,
         );
     }
 
-    public static toPixel(ctx: CanvasRenderingContext2D, world: World, vec: Vector): Vector {
+    public static toPixel(
+        vec: Vector,
+        world: World,
+        viewWidth: number,
+        viewHeight: number,
+    ): Vector {
         return new Vector(
-            (vec.x - world.camera.x) * world.zoomFactor + ctx.canvas.width / 2,
-            (vec.y - world.camera.y) * world.zoomFactor + ctx.canvas.height / 2,
+            (vec.x - world.camera.x) * world.zoomFactor + viewWidth / 2,
+            (vec.y - world.camera.y) * world.zoomFactor + viewHeight / 2,
         );
     }
 }
