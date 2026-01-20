@@ -1,37 +1,20 @@
 import { EventEmitter } from '../event/event-emitter';
 import {
+    DOMEvents,
     GameKeyboardEvent,
+    GameLoopEvents,
     GameMouseEvent,
     GameRenderEvent,
     GameUpdateEvent,
     GameWheelEvent,
+    StateEvents,
 } from '../event/event-factory';
 import { World } from '../world/world';
 import { Layer } from './layer/layer';
 
 export type StateClass<T extends State> = new () => T;
 
-type StateEvents = {
-    enter: undefined;
-    leave: undefined;
-    mouseDown: CustomEvent<GameMouseEvent>;
-    mouseUp: CustomEvent<GameMouseEvent>;
-    mouseMove: CustomEvent<GameMouseEvent>;
-    scroll: CustomEvent<GameWheelEvent>;
-    mouseEnter: CustomEvent<GameMouseEvent>;
-    mouseOut: CustomEvent<GameMouseEvent>;
-    contextMenu: CustomEvent<GameMouseEvent>;
-    visibilityChange: undefined;
-    keyDown: CustomEvent<GameKeyboardEvent>;
-    keyUp: CustomEvent<GameKeyboardEvent>;
-    keyboardUp: CustomEvent<GameKeyboardEvent>;
-    keyboardDown: CustomEvent<GameKeyboardEvent>;
-    fixedUpdate: undefined;
-    update: CustomEvent<GameUpdateEvent>;
-    render: CustomEvent<GameRenderEvent>;
-};
-
-export abstract class State extends EventEmitter<StateEvents> {
+export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameLoopEvents> {
     public layers: Map<string, Layer>;
     protected layerStack: Layer[];
 
@@ -88,52 +71,28 @@ export abstract class State extends EventEmitter<StateEvents> {
         this.layerStack.forEach((layer) => layer.dispatch('leave'));
     }
 
-    protected onMouseDown(e: CustomEvent<GameMouseEvent>): boolean {
+    protected onMouseDown(e: CustomEvent<GameMouseEvent>) {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
             this.layerStack[i].dispatch('mouseDown', e);
-
-            if (e.detail.propagationStopped) {
-                break;
-            }
         }
-
-        return true;
     }
 
-    protected onMouseUp(e: CustomEvent<GameMouseEvent>): boolean {
+    protected onMouseUp(e: CustomEvent<GameMouseEvent>) {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
             this.layerStack[i].dispatch('mouseUp', e);
-
-            if (e.detail.propagationStopped) {
-                break;
-            }
         }
-
-        return true;
     }
 
-    protected onMouseMove(e: CustomEvent<GameMouseEvent>): boolean {
+    protected onMouseMove(e: CustomEvent<GameMouseEvent>) {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
             this.layerStack[i].dispatch('mouseMove', e);
-
-            if (e.detail.propagationStopped) {
-                break;
-            }
         }
-
-        return true;
     }
 
-    protected onScroll(e: CustomEvent<GameWheelEvent>): boolean {
+    protected onScroll(e: CustomEvent<GameWheelEvent>) {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
             this.layerStack[i].dispatch('scroll', e);
-
-            if (e.detail.propagationStopped) {
-                break;
-            }
         }
-
-        return true;
     }
 
     protected onMouseEnter(e: CustomEvent<GameMouseEvent>): void {
@@ -144,16 +103,10 @@ export abstract class State extends EventEmitter<StateEvents> {
         this.layerStack.forEach((layer) => layer.dispatch('mouseOut', e));
     }
 
-    protected onContextMenu(e: CustomEvent<GameMouseEvent>): boolean {
+    protected onContextMenu(e: CustomEvent<GameMouseEvent>) {
         for (let i = this.layerStack.length - 1; i >= 0; i--) {
             this.layerStack[i].dispatch('contextMenu', e);
-
-            if (e.detail.propagationStopped) {
-                break;
-            }
         }
-
-        return true;
     }
 
     protected onVisibilityChange(): void {

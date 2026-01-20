@@ -1,8 +1,7 @@
-import { LifeCycleFunctions } from '../core/lifecycle-functions.interface';
 import { EventFactory } from '../event/event-factory';
 import { State, StateClass } from './state';
 
-export class StateManager implements LifeCycleFunctions {
+export class StateManager {
     private states: Map<string, State>;
     private stateStack: State[];
 
@@ -51,7 +50,7 @@ export class StateManager implements LifeCycleFunctions {
         if (this.stateStack.length) {
             const updateEvent = EventFactory.createGameEvent({
                 name: 'update',
-                propagationStopped: false,
+                consumed: false,
                 progress,
                 delta,
             });
@@ -64,7 +63,7 @@ export class StateManager implements LifeCycleFunctions {
         if (this.stateStack.length) {
             const renderEvent = EventFactory.createGameEvent({
                 name: 'render',
-                propagationStopped: false,
+                consumed: false,
                 ctx,
             });
 

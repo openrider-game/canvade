@@ -62,8 +62,10 @@ export class Game {
     }
 
     private setCanvasSize() {
-        this.canvas.width = this.canvas.parentElement!.clientWidth;
-        this.canvas.height = this.canvas.parentElement!.clientHeight;
+        const devicePixelRatio = window.devicePixelRatio || 1;
+
+        this.canvas.width = this.canvas.parentElement!.clientWidth * devicePixelRatio;
+        this.canvas.height = this.canvas.parentElement!.clientHeight * devicePixelRatio;
 
         this.setContextProperties(this.ctx);
     }

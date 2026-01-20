@@ -49,7 +49,7 @@ export class EventManager {
 
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'mouseDown',
-            propagationStopped: false,
+            consumed: false,
             mouseEvent: e,
         });
         stateManager.getCurrent()?.dispatch('mouseDown', gameMouseEvent);
@@ -60,7 +60,7 @@ export class EventManager {
     public onMouseUp(e: MouseEvent, stateManager: StateManager): boolean {
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'mouseUp',
-            propagationStopped: false,
+            consumed: false,
             mouseEvent: e,
         });
         stateManager.getCurrent()?.dispatch('mouseUp', gameMouseEvent);
@@ -73,7 +73,7 @@ export class EventManager {
 
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'mouseMove',
-            propagationStopped: false,
+            consumed: false,
             mouseEvent: e,
         });
         stateManager.getCurrent()?.dispatch('mouseMove', gameMouseEvent);
@@ -86,7 +86,7 @@ export class EventManager {
 
         const gameWheelEvent = EventFactory.createGameEvent({
             name: 'scroll',
-            propagationStopped: false,
+            consumed: false,
             wheelEvent: e,
             viewWidth: this.ctx.canvas.width,
             viewHeight: this.ctx.canvas.height,
@@ -100,7 +100,7 @@ export class EventManager {
     public onMouseEnter(e: MouseEvent, stateManager: StateManager): void {
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'mouseEnter',
-            propagationStopped: false,
+            consumed: false,
             mouseEvent: e,
         });
         stateManager.getCurrent()?.dispatch('mouseEnter', gameMouseEvent);
@@ -109,7 +109,7 @@ export class EventManager {
     public onMouseOut(e: MouseEvent, stateManager: StateManager): void {
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'mouseOut',
-            propagationStopped: false,
+            consumed: false,
             mouseEvent: e,
         });
         stateManager.getCurrent()?.dispatch('mouseOut', gameMouseEvent);
@@ -120,7 +120,7 @@ export class EventManager {
 
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'contextMenu',
-            propagationStopped: false,
+            consumed: false,
             mouseEvent: e,
         });
         stateManager.getCurrent()?.dispatch('contextMenu', gameMouseEvent);
@@ -138,7 +138,7 @@ export class EventManager {
 
             const gameKeyboardEvent = EventFactory.createGameEvent({
                 name: 'keyDown',
-                propagationStopped: false,
+                consumed: false,
                 keyboardEvent: e,
             });
             stateManager.getCurrent()?.dispatch('keyDown', gameKeyboardEvent);
@@ -152,7 +152,7 @@ export class EventManager {
 
             const gameKeyboardEvent = EventFactory.createGameEvent({
                 name: 'keyUp',
-                propagationStopped: false,
+                consumed: false,
                 keyboardEvent: e,
             });
             stateManager.getCurrent()?.dispatch('keyUp', gameKeyboardEvent);
@@ -163,7 +163,7 @@ export class EventManager {
     public onKeyboardDown(e: CustomEvent<KeyboardEventPayload>, stateManager: StateManager): void {
         const gameKeyboardEvent = EventFactory.createGameEvent({
             name: 'keyboardDown',
-            propagationStopped: false,
+            consumed: false,
             keyboardEvent: e.detail.keyboardEvent,
             key: e.detail.key,
         });
@@ -173,7 +173,7 @@ export class EventManager {
     public onKeyboardUp(e: CustomEvent<KeyboardEventPayload>, stateManager: StateManager): void {
         const gameKeyboardEvent = EventFactory.createGameEvent({
             name: 'keyboardUp',
-            propagationStopped: false,
+            consumed: false,
             keyboardEvent: e.detail.keyboardEvent,
             key: e.detail.key,
         });
