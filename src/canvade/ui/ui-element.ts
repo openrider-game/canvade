@@ -1,18 +1,13 @@
 import { EventEmitter } from '../event/event-emitter';
-import { DOMEvents, GameLoopEvents, GameMouseEvent } from '../event/event-factory';
+import { EventFactory } from '../event/event-factory';
 import { Mouse } from '../event/mouse/mouse';
-
-type UIEvents = {
-    focusIn: undefined;
-    focusOut: undefined;
-    hoverIn: undefined;
-    hoverOut: undefined;
-    click: undefined;
-};
+import { DOMEvents, GameMouseEvent } from '../event/types/dom-events';
+import { GameLoopEvents } from '../event/types/game-loop-events';
+import { UIEvents } from '../event/types/ui-events';
 
 export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents & UIEvents> {
-    protected focused: boolean = false;
     protected hovered: boolean = false;
+    protected focused: boolean = false;
 
     public readonly childrenElements: UIElement[] = [];
 
@@ -44,22 +39,8 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
         );
     }
 
-    private focus(on: boolean): void {
-        this.childrenElements.forEach((childElement) => childElement.focus(on));
-
-        if (this.focused === on) return;
-
-        this.focused = on;
-
-        if (on) {
-            this.dispatch('focusIn');
-        } else {
-            this.dispatch('focusOut');
-        }
-    }
-
-    private hover(on: boolean) {
-        this.childrenElements.forEach((childElement) => childElement.hover(on));
+    private setHover(on: boolean) {
+        this.childrenElements.forEach((childElement) => childElement.setHover(on));
 
         if (this.hovered === on) return;
 
@@ -72,18 +53,28 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
         }
     }
 
+    private setFocus(on: boolean): void {
+        this.childrenElements.forEach((childElement) => childElement.setFocus(on));
+
+        if (this.focused === on) return;
+
+        this.focused = on;
+
+        if (on) {
+            this.dispatch('focusIn');
+        } else {
+            this.dispatch('focusOut');
+        }
+    }
+
     private onMouseDown(e: CustomEvent<GameMouseEvent>) {
         for (const childElement of this.childrenElements) {
             childElement.dispatch('mouseDown', e);
-
-            if (e.detail.consumed) {
-                return;
-            }
         }
 
         if (e.detail.consumed) {
-            this.focus(false);
-            this.hover(false);
+            this.setFocus(false);
+            this.setHover(false);
 
             return;
         }
@@ -92,55 +83,56 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
 
         if (e.detail.mouseEvent.button === 0 && intersects) {
             e.detail.consumed = true;
-            this.focus(true);
+            this.setFocus(true);
         }
     }
 
     public onMouseUp(e: CustomEvent<GameMouseEvent>) {
         for (const childElement of this.childrenElements) {
             childElement.dispatch('mouseUp', e);
-
-            if (e.detail.consumed) {
-                return;
-            }
         }
 
         if (e.detail.consumed) {
+            this.setFocus(false);
+            this.setHover(false);
+
             return;
         }
 
         const intersects = this.intersects();
 
-        if (intersects && this.focused) {
+        if (intersects) {
             e.detail.consumed = true;
-            this.focus(false);
 
-            this.dispatch('click');
+            if (this.focused) {
+                const clickEvent = EventFactory.createGameEvent({
+                    name: 'click',
+                    consumed: false,
+                    mouseEvent: e.detail.mouseEvent,
+                    target: this,
+                });
+                this.dispatch('click', clickEvent);
+            }
+        }
+
+        if (this.focused) {
+            this.setFocus(false);
         }
     }
 
     public onMouseMove(e: CustomEvent<GameMouseEvent>) {
         for (const childElement of this.childrenElements) {
             childElement.dispatch('mouseMove', e);
-
-            if (e.detail.consumed) {
-                return;
-            }
         }
 
         if (e.detail.consumed) {
-            this.focus(false);
-            this.hover(false);
+            this.setHover(false);
 
             return;
         }
 
         const intersects = this.intersects();
-        this.hover(intersects);
-
-        if (!intersects && this.focused) {
-            this.focus(false);
-        }
+        this.setHover(intersects);
 
         if (intersects) {
             e.detail.consumed = true;
@@ -150,7 +142,7 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
     public onMouseOut(e: CustomEvent<GameMouseEvent>): void {
         this.childrenElements.forEach((childElement) => childElement.dispatch('mouseOut', e));
 
-        this.focus(false);
-        this.hover(false);
+        this.setFocus(false);
+        this.setHover(false);
     }
 }

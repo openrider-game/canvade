@@ -2,13 +2,11 @@ import { EventEmitter } from '../event/event-emitter';
 import {
     DOMEvents,
     GameKeyboardEvent,
-    GameLoopEvents,
     GameMouseEvent,
-    GameRenderEvent,
-    GameUpdateEvent,
     GameWheelEvent,
-    StateEvents,
-} from '../event/event-factory';
+} from '../event/types/dom-events';
+import { GameLoopEvents, GameRenderEvent, GameUpdateEvent } from '../event/types/game-loop-events';
+import { StateEvents } from '../event/types/state-events';
 import { World } from '../world/world';
 import { Layer } from './layer/layer';
 
