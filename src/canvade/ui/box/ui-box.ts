@@ -1,4 +1,4 @@
-import { Cloneable } from '../core/cloneable.interface';
+import { Cloneable } from '../../core/cloneable.interface';
 import { UIBoxSide } from './ui-box-side';
 
 export class UIBox implements Cloneable<UIBox> {

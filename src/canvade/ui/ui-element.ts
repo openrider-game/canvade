@@ -4,25 +4,35 @@ import { Mouse } from '../event/mouse/mouse';
 import { DOMEvents, GameMouseEvent } from '../event/types/dom-events';
 import { GameLoopEvents, GameRenderEvent } from '../event/types/game-loop-events';
 import { UIEvents } from '../event/types/ui-events';
+import { UIBox } from './box/ui-box';
 import {
-    UIElementHeightProperty,
-    UIElementWidthProperty,
-} from './property-types/ui-element-dimension-property';
-import { UIBox } from './ui-box';
-import { ComputedType, FormatMap, PropertyMap } from './ui-element-property';
+    UIBoxAnchor,
+    UIBoxAnchorBottomLeft,
+    UIBoxAnchorBottomRight,
+    UIBoxAnchorTopLeft,
+    UIBoxAnchorTopRight,
+} from './box/ui-box-anchor';
+import { property, UIProperty } from './property-rules/ui-property';
+import { heightRule, widthRule } from './property-rules/ui-property-rules';
 
-export interface UIElementPropertyMap extends PropertyMap<ComputedType> {
-    top?: UIElementHeightProperty;
-    left?: UIElementWidthProperty;
-    width?: UIElementWidthProperty;
-    height?: UIElementHeightProperty;
-}
-export type UIElementPropertyFormatMap = FormatMap<UIElementPropertyMap>;
+type Without<T, U> = { [P in Exclude<keyof T, keyof U>]?: never };
+type XOR<T, U> = T | U extends object ? (Without<T, U> & U) | (Without<U, T> & T) : T | U;
+
+export type UIElementDefinition = {
+    width?: string;
+    height?: string;
+} & XOR<{ left?: string }, { right?: string }> &
+    XOR<{ top?: string }, { bottom?: string }>;
 
 export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents & UIEvents> {
-    public readonly properties: UIElementPropertyMap = {};
+    private anchor: UIBoxAnchor;
 
-    private parentElement?: UIElement;
+    public readonly verticalOffset: UIProperty<number>;
+    public readonly horizontalOffset: UIProperty<number>;
+    public readonly width: UIProperty<number>;
+    public readonly height: UIProperty<number>;
+
+    public parentElement?: UIElement;
     public readonly childrenElements: UIElement[] = [];
 
     private box?: UIBox;
@@ -30,15 +40,30 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
     protected hovered: boolean = false;
     protected focused: boolean = false;
 
-    constructor(propertyDefinitions: UIElementPropertyFormatMap = {}) {
+    constructor(definition: UIElementDefinition) {
         super();
 
-        this.properties.top = new UIElementHeightProperty(propertyDefinitions.top || '0px');
-        this.properties.left = new UIElementWidthProperty(propertyDefinitions.left || '0px');
-        this.properties.width = new UIElementWidthProperty(propertyDefinitions.width || '0px');
-        this.properties.height = new UIElementHeightProperty(propertyDefinitions.height || '0px');
+        this.anchor = this.getAnchor(definition);
+
+        this.verticalOffset = property(definition.top || definition.bottom, heightRule);
+        this.horizontalOffset = property(definition.left || definition.right, widthRule);
+        this.width = property(definition.width, widthRule);
+        this.height = property(definition.height, heightRule);
 
         this.defaultInit();
+    }
+
+    private getAnchor(definition: UIElementDefinition): UIBoxAnchor {
+        if (definition.bottom) {
+            if (definition.right) {
+                return UIBoxAnchorBottomRight;
+            }
+            return UIBoxAnchorBottomLeft;
+        }
+        if (definition.right) {
+            return UIBoxAnchorTopRight;
+        }
+        return UIBoxAnchorTopLeft;
     }
 
     private defaultInit(): void {
@@ -62,19 +87,24 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
 
     computeBox(): void {
         if (!this.parentElement) {
-            const width = parseInt(this.properties.width?.displayValue || '0');
-            const height = parseInt(this.properties.height?.displayValue || '0');
-
-            this.box = new UIBox(0, 0, width, height);
+            this.box = new UIBox(0, 0, this.width(), this.height());
             return;
         }
 
-        const minX = this.properties.left?.getComputedValue(this.parentElement) || 0;
-        const minY = this.properties.top?.getComputedValue(this.parentElement) || 0;
-        const maxX = (this.properties.width?.getComputedValue(this.parentElement) || 0) + minX;
-        const maxY = (this.properties.height?.getComputedValue(this.parentElement) || 0) + minY;
+        if (this.parentElement.box) {
+            const verticalOffset = this.verticalOffset(this.parentElement);
+            const horizontalOffset = this.horizontalOffset(this.parentElement);
+            const width = this.width(this.parentElement);
+            const height = this.height(this.parentElement);
 
-        this.box = new UIBox(minX, minY, maxX, maxY);
+            const anchored = this.parentElement.box.clone();
+
+            this.anchor.vertical.cut(anchored, verticalOffset);
+            this.anchor.horizontal.cut(anchored, horizontalOffset);
+
+            const boxOfHeight = this.anchor.vertical.get(anchored, height);
+            this.box = this.anchor.horizontal.get(boxOfHeight, width);
+        }
     }
 
     private renderTree(e: CustomEvent<GameRenderEvent>): void {
