@@ -18,3 +18,4 @@ export * from './canvade/ui/property-rules/ui-property';
 export * from './canvade/ui/property-rules/ui-property-rules';
 
 export * from './canvade/ui/ui-element';
+export * from './canvade/ui/ui-node';

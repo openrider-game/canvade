@@ -1,4 +1,4 @@
-import { UIElement } from '../ui-element';
+import { UINode } from '../ui-node';
 
 export type ValueEqualityFn = (a?: string, b?: string) => boolean;
 
@@ -6,7 +6,7 @@ function defaultEquals(a?: string, b?: string) {
     return Object.is(a, b);
 }
 
-export type ValueComputeFn<T> = (value?: string, parent?: UIElement) => T;
+export type ValueComputeFn<T> = (value?: string, parent?: UINode) => T;
 
 function defaultCompute<T>(value?: string) {
     return value as T;
@@ -14,7 +14,7 @@ function defaultCompute<T>(value?: string) {
 
 export type UIProperty<T> = (() => T) & {
     set(value: string): void;
-    compute(parent?: UIElement): void;
+    compute(parent?: UINode): void;
 };
 
 interface UIPropertyNode<T> {
@@ -26,7 +26,7 @@ interface UIPropertyNode<T> {
 
 type UIPropertyGetter<T> = (() => T) & { readonly propertyNode: UIPropertyNode<T> };
 type UIPropertySetter = (newValue: string) => void;
-type UIPropertyCompute = (parent?: UIElement) => void;
+type UIPropertyCompute = (parent?: UINode) => void;
 
 export function property<T>(initialValue?: string, computeFn?: ValueComputeFn<T>): UIProperty<T> {
     const [get, set, compute] = createProperty(initialValue, computeFn);
@@ -51,7 +51,7 @@ function createProperty<T>(
 
     const setter = ((newValue: string) => propertySetFn(node, newValue)) as UIPropertySetter;
 
-    const compute = ((parent?: UIElement) =>
+    const compute = ((parent?: UINode) =>
         propertyComputeFn(node, computeFn ?? defaultCompute, parent)) as UIPropertyCompute;
 
     return [getter, setter, compute];
@@ -70,7 +70,7 @@ function propertySetFn<T>(node: UIPropertyNode<T>, newValue: string) {
 function propertyComputeFn<T>(
     node: UIPropertyNode<T>,
     compute: ValueComputeFn<T>,
-    parent?: UIElement,
+    parent?: UINode,
 ) {
     node.computedValue = compute(node.value, parent);
 }

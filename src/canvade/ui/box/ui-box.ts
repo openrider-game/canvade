@@ -1,6 +1,19 @@
 import { Cloneable } from '../../core/cloneable.interface';
 import { UIBoxSide } from './ui-box-side';
 
+type UIOperationAdd = { type: 'add'; side: UIBoxSide };
+type UIOperationGet = { type: 'get'; side: UIBoxSide };
+type UIOperationCut = { type: 'cut'; side: UIBoxSide };
+type UIOperationClone = { type: 'clone' };
+type UIOperationShrink = { type: 'shrink' };
+
+export type UIOperation =
+    | UIOperationAdd
+    | UIOperationGet
+    | UIOperationCut
+    | UIOperationClone
+    | UIOperationShrink;
+
 export class UIBox implements Cloneable<UIBox> {
     private hSpacing: number = 0;
     private vSpacing: number = 0;
@@ -123,5 +136,14 @@ export class UIBox implements Cloneable<UIBox> {
 
     addLeft(amount: number): UIBox {
         return new UIBox(this.minX - amount, this.minY, this.maxX, this.maxY);
+    }
+
+    shrink(amount: number): UIBox {
+        return new UIBox(
+            this.minX + amount,
+            this.minY + amount,
+            this.maxX - amount,
+            this.maxY - amount,
+        );
     }
 }
