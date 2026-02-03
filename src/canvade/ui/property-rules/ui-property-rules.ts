@@ -16,7 +16,7 @@ function relativeLengthValue(value: string, parentLength?: number) {
 
 export const heightRule: ValueComputeFn<number> = (value, parent) => {
     if (value) {
-        return relativeLengthValue(value, parent?.height(parent.parentElement));
+        return relativeLengthValue(value, parent?.getBox()?.height);
     }
 
     return 0;
@@ -24,7 +24,7 @@ export const heightRule: ValueComputeFn<number> = (value, parent) => {
 
 export const widthRule: ValueComputeFn<number> = (value, parent) => {
     if (value) {
-        return relativeLengthValue(value, parent?.width(parent.parentElement));
+        return relativeLengthValue(value, parent?.getBox()?.width);
     }
 
     return 0;

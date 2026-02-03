@@ -12,7 +12,6 @@ export * from './canvade/state/state';
 export * from './canvade/state/state-manager';
 
 export * from './canvade/ui/box/ui-box';
-export * from './canvade/ui/box/ui-box-anchor';
 export * from './canvade/ui/box/ui-box-side';
 
 export * from './canvade/ui/property-rules/ui-property';

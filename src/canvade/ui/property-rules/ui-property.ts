@@ -12,57 +12,52 @@ function defaultCompute<T>(value?: string) {
     return value as T;
 }
 
-export type UIProperty<T> = ((parent?: UIElement) => T) & {
+export type UIProperty<T> = (() => T) & {
     set(value: string): void;
+    compute(parent?: UIElement): void;
 };
 
 interface UIPropertyNode<T> {
     initialValue: string | undefined;
     value: string | undefined;
     computedValue: T;
-    parent: UIElement | undefined;
     equals: ValueEqualityFn;
-    compute: ValueComputeFn<T>;
 }
 
 type UIPropertyGetter<T> = (() => T) & { readonly propertyNode: UIPropertyNode<T> };
 type UIPropertySetter = (newValue: string) => void;
+type UIPropertyCompute = (parent?: UIElement) => void;
 
-export function property<T>(initialValue?: string, compute?: ValueComputeFn<T>): UIProperty<T> {
-    const [get, set] = createProperty(initialValue, compute);
+export function property<T>(initialValue?: string, computeFn?: ValueComputeFn<T>): UIProperty<T> {
+    const [get, set, compute] = createProperty(initialValue, computeFn);
 
     const propertyFn = get as UIPropertyGetter<T> & UIProperty<T>;
     propertyFn.set = set;
+    propertyFn.compute = compute;
 
     return propertyFn as UIProperty<T>;
 }
 
 function createProperty<T>(
     initialValue?: string,
-    compute?: ValueComputeFn<T>,
-): [UIPropertyGetter<T>, UIPropertySetter] {
+    computeFn?: ValueComputeFn<T>,
+): [UIPropertyGetter<T>, UIPropertySetter, UIPropertyCompute] {
     const node: UIPropertyNode<T> = Object.create(PROPERTY_NODE);
     node.initialValue = initialValue;
     node.value = initialValue;
 
-    if (compute) {
-        node.compute = compute;
-    }
-
-    const getter = ((parent: UIElement) => propertyGetFn(node, parent)) as UIPropertyGetter<T>;
+    const getter = (() => propertyGetFn(node)) as UIPropertyGetter<T>;
     (getter as { propertyNode: UIPropertyNode<T> }).propertyNode = node;
 
     const setter = ((newValue: string) => propertySetFn(node, newValue)) as UIPropertySetter;
 
-    return [getter, setter];
+    const compute = ((parent?: UIElement) =>
+        propertyComputeFn(node, computeFn ?? defaultCompute, parent)) as UIPropertyCompute;
+
+    return [getter, setter, compute];
 }
 
-function propertyGetFn<T>(node: UIPropertyNode<T>, parent?: UIElement): T {
-    if (!parent || !Object.is(parent, node.parent)) {
-        node.parent = parent;
-        node.computedValue = node.compute(node.value, parent);
-    }
-
+function propertyGetFn<T>(node: UIPropertyNode<T>): T {
     return node.computedValue;
 }
 
@@ -72,11 +67,17 @@ function propertySetFn<T>(node: UIPropertyNode<T>, newValue: string) {
     }
 }
 
+function propertyComputeFn<T>(
+    node: UIPropertyNode<T>,
+    compute: ValueComputeFn<T>,
+    parent?: UIElement,
+) {
+    node.computedValue = compute(node.value, parent);
+}
+
 const PROPERTY_NODE: UIPropertyNode<unknown> = {
     initialValue: undefined,
     value: undefined,
     computedValue: undefined,
-    parent: undefined,
     equals: defaultEquals,
-    compute: defaultCompute,
 };

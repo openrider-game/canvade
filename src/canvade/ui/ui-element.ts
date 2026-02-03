@@ -1,36 +1,22 @@
 import { EventEmitter } from '../event/event-emitter';
-import { EventFactory } from '../event/event-factory';
+import { EventFactory, GameEvent } from '../event/event-factory';
 import { Mouse } from '../event/mouse/mouse';
 import { DOMEvents, GameMouseEvent } from '../event/types/dom-events';
 import { GameLoopEvents, GameRenderEvent } from '../event/types/game-loop-events';
 import { UIEvents } from '../event/types/ui-events';
 import { UIBox } from './box/ui-box';
-import {
-    UIBoxAnchor,
-    UIBoxAnchorBottomLeft,
-    UIBoxAnchorBottomRight,
-    UIBoxAnchorTopLeft,
-    UIBoxAnchorTopRight,
-} from './box/ui-box-anchor';
+import { UIBoxSide, UIBoxSideLeft, UIBoxSideRight } from './box/ui-box-side';
 import { property, UIProperty } from './property-rules/ui-property';
 import { heightRule, widthRule } from './property-rules/ui-property-rules';
 
-type Without<T, U> = { [P in Exclude<keyof T, keyof U>]?: never };
-type XOR<T, U> = T | U extends object ? (Without<T, U> & U) | (Without<U, T> & T) : T | U;
-
 export type UIElementDefinition = {
-    width?: string;
-    height?: string;
-} & XOR<{ left?: string }, { right?: string }> &
-    XOR<{ top?: string }, { bottom?: string }>;
+    size: string;
+    boxSide: UIBoxSide;
+};
 
 export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents & UIEvents> {
-    private anchor: UIBoxAnchor;
-
-    public readonly verticalOffset: UIProperty<number>;
-    public readonly horizontalOffset: UIProperty<number>;
-    public readonly width: UIProperty<number>;
-    public readonly height: UIProperty<number>;
+    public readonly size: UIProperty<number>;
+    private boxSide: UIBoxSide;
 
     public parentElement?: UIElement;
     public readonly childrenElements: UIElement[] = [];
@@ -40,30 +26,18 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
     protected hovered: boolean = false;
     protected focused: boolean = false;
 
-    constructor(definition: UIElementDefinition) {
+    constructor(definition: UIElementDefinition = { boxSide: UIBoxSideLeft, size: '' }) {
         super();
 
-        this.anchor = this.getAnchor(definition);
+        let sizeRule = heightRule;
+        if ([UIBoxSideLeft, UIBoxSideRight].includes(definition.boxSide)) {
+            sizeRule = widthRule;
+        }
 
-        this.verticalOffset = property(definition.top || definition.bottom, heightRule);
-        this.horizontalOffset = property(definition.left || definition.right, widthRule);
-        this.width = property(definition.width, widthRule);
-        this.height = property(definition.height, heightRule);
+        this.size = property(definition.size, sizeRule);
+        this.boxSide = definition.boxSide;
 
         this.defaultInit();
-    }
-
-    private getAnchor(definition: UIElementDefinition): UIBoxAnchor {
-        if (definition.bottom) {
-            if (definition.right) {
-                return UIBoxAnchorBottomRight;
-            }
-            return UIBoxAnchorBottomLeft;
-        }
-        if (definition.right) {
-            return UIBoxAnchorTopRight;
-        }
-        return UIBoxAnchorTopLeft;
     }
 
     private defaultInit(): void {
@@ -85,32 +59,28 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
         return this.box;
     }
 
-    computeBox(): void {
+    protected computeProperties() {
+        this.size.compute(this.parentElement);
+    }
+
+    private computeBox(e: CustomEvent<GameRenderEvent>): void {
         if (!this.parentElement) {
-            this.box = new UIBox(0, 0, this.width(), this.height());
+            this.box = new UIBox(0, 0, e.detail.ctx.canvas.width, e.detail.ctx.canvas.height);
             return;
         }
 
         if (this.parentElement.box) {
-            const verticalOffset = this.verticalOffset(this.parentElement);
-            const horizontalOffset = this.horizontalOffset(this.parentElement);
-            const width = this.width(this.parentElement);
-            const height = this.height(this.parentElement);
+            const size = this.size();
 
-            const anchored = this.parentElement.box.clone();
-
-            this.anchor.vertical.cut(anchored, verticalOffset);
-            this.anchor.horizontal.cut(anchored, horizontalOffset);
-
-            const boxOfHeight = this.anchor.vertical.get(anchored, height);
-            this.box = this.anchor.horizontal.get(boxOfHeight, width);
+            this.box = this.boxSide.cut(this.parentElement.box, size);
         }
     }
 
     private renderTree(e: CustomEvent<GameRenderEvent>): void {
-        this.computeBox();
+        this.computeBox(e);
         this.render(e);
 
+        this.childrenElements.forEach((childElement) => childElement.computeProperties());
         this.childrenElements.forEach((childElement) => childElement.dispatch('render', e));
     }
 
@@ -129,9 +99,11 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
         );
     }
 
-    private setHover(on: boolean) {
-        this.childrenElements.forEach((childElement) => childElement.setHover(on));
+    protected consumeEvent(e: CustomEvent<GameEvent>) {
+        e.detail.consumed = true;
+    }
 
+    private setHover(on: boolean) {
         if (this.hovered === on) return;
 
         this.hovered = on;
@@ -144,8 +116,6 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
     }
 
     private setFocus(on: boolean): void {
-        this.childrenElements.forEach((childElement) => childElement.setFocus(on));
-
         if (this.focused === on) return;
 
         this.focused = on;
@@ -172,12 +142,12 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
         const intersects = this.intersects();
 
         if (e.detail.mouseEvent.button === 0 && intersects) {
-            e.detail.consumed = true;
+            this.consumeEvent(e);
             this.setFocus(true);
         }
     }
 
-    public onMouseUp(e: CustomEvent<GameMouseEvent>) {
+    private onMouseUp(e: CustomEvent<GameMouseEvent>) {
         for (let i = this.childrenElements.length - 1; i >= 0; i--) {
             this.childrenElements[i].dispatch('mouseUp', e);
         }
@@ -192,7 +162,7 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
         const intersects = this.intersects();
 
         if (intersects) {
-            e.detail.consumed = true;
+            this.consumeEvent(e);
 
             if (this.focused) {
                 const clickEvent = EventFactory.createGameEvent({
@@ -210,7 +180,7 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
         }
     }
 
-    public onMouseMove(e: CustomEvent<GameMouseEvent>) {
+    private onMouseMove(e: CustomEvent<GameMouseEvent>) {
         for (let i = this.childrenElements.length - 1; i >= 0; i--) {
             this.childrenElements[i].dispatch('mouseMove', e);
         }
@@ -225,11 +195,11 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
         this.setHover(intersects);
 
         if (intersects) {
-            e.detail.consumed = true;
+            this.consumeEvent(e);
         }
     }
 
-    public onMouseOut(e: CustomEvent<GameMouseEvent>): void {
+    private onMouseOut(e: CustomEvent<GameMouseEvent>): void {
         for (let i = this.childrenElements.length - 1; i >= 0; i--) {
             this.childrenElements[i].dispatch('mouseOut', e);
         }
@@ -239,8 +209,12 @@ export abstract class UIElement extends EventEmitter<DOMEvents & GameLoopEvents 
     }
 }
 
-export class UIRoot extends UIElement {
+export class UIContainer extends UIElement {
     protected override render(): void {
-        // The root element does not render anything itself
+        // Containers do not render anything
+    }
+
+    protected override consumeEvent(): void {
+        // Containers don't consume events by default
     }
 }
