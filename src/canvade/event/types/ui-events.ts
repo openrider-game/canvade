@@ -1,10 +1,12 @@
-import { UINode } from '../../ui/ui-node';
+import { UIElement } from '../../ui/ui-element';
 import { GameEvent } from '../event-factory';
 import { GameRenderEvent } from './game-loop-events';
+import Vector from '../../core/math/vector';
 
 export type GameClickEvent = GameEvent & {
     mouseEvent: MouseEvent;
-    target: UINode;
+    position: Vector;
+    target: UIElement;
 };
 
 export type UIEvents = {

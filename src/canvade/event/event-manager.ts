@@ -38,8 +38,8 @@ export class EventManager {
         e.preventDefault();
         this.ctx.canvas.focus();
 
-        this.setMousePos(e, stateManager);
-        Mouse.lastClick.set(Mouse.mousePos);
+        const position = this.setMousePos(e, stateManager);
+        Mouse.lastClick.set(position);
 
         const world = stateManager.getCurrent()?.getWorld();
 
@@ -51,6 +51,7 @@ export class EventManager {
             name: 'mouseDown',
             consumed: false,
             mouseEvent: e,
+            position,
         });
         stateManager.getCurrent()?.dispatch('mouseDown', gameMouseEvent);
 
@@ -58,10 +59,12 @@ export class EventManager {
     }
 
     public onMouseUp(e: MouseEvent, stateManager: StateManager): boolean {
+        const position = this.setMousePos(e, stateManager);
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'mouseUp',
             consumed: false,
             mouseEvent: e,
+            position,
         });
         stateManager.getCurrent()?.dispatch('mouseUp', gameMouseEvent);
 
@@ -69,12 +72,13 @@ export class EventManager {
     }
 
     public onMouseMove(e: MouseEvent, stateManager: StateManager): boolean {
-        this.setMousePos(e, stateManager);
+        const position = this.setMousePos(e, stateManager);
 
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'mouseMove',
             consumed: false,
             mouseEvent: e,
+            position,
         });
         stateManager.getCurrent()?.dispatch('mouseMove', gameMouseEvent);
 
@@ -98,19 +102,23 @@ export class EventManager {
     }
 
     public onMouseEnter(e: MouseEvent, stateManager: StateManager): void {
+        const position = this.setMousePos(e, stateManager);
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'mouseEnter',
             consumed: false,
             mouseEvent: e,
+            position,
         });
         stateManager.getCurrent()?.dispatch('mouseEnter', gameMouseEvent);
     }
 
     public onMouseOut(e: MouseEvent, stateManager: StateManager): void {
+        const position = this.setMousePos(e, stateManager);
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'mouseOut',
             consumed: false,
             mouseEvent: e,
+            position,
         });
         stateManager.getCurrent()?.dispatch('mouseOut', gameMouseEvent);
     }
@@ -118,10 +126,12 @@ export class EventManager {
     public onContextMenu(e: MouseEvent, stateManager: StateManager): boolean {
         e.preventDefault();
 
+        const position = this.setMousePos(e, stateManager);
         const gameMouseEvent = EventFactory.createGameEvent({
             name: 'contextMenu',
             consumed: false,
             mouseEvent: e,
+            position,
         });
         stateManager.getCurrent()?.dispatch('contextMenu', gameMouseEvent);
 
@@ -180,12 +190,14 @@ export class EventManager {
         stateManager.getCurrent()?.dispatch('keyboardUp', gameKeyboardEvent);
     }
 
-    private setMousePos(e: MouseEvent, stateManager: StateManager): void {
+    private setMousePos(e: MouseEvent, stateManager: StateManager): Vector {
         const canvasRect = this.ctx.canvas.getBoundingClientRect();
+        const scaleX = canvasRect.width === 0 ? 0 : this.ctx.canvas.width / canvasRect.width;
+        const scaleY = canvasRect.height === 0 ? 0 : this.ctx.canvas.height / canvasRect.height;
         Mouse.mousePos.set(
             new Vector(
-                e.clientX - canvasRect.left + window.scrollX,
-                e.clientY - canvasRect.top + window.scrollY,
+                (e.clientX - canvasRect.left) * scaleX,
+                (e.clientY - canvasRect.top) * scaleY,
             ),
         );
 
@@ -200,5 +212,7 @@ export class EventManager {
                 ),
             );
         }
+
+        return Mouse.mousePos.clone();
     }
 }

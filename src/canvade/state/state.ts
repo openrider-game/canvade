@@ -1,4 +1,5 @@
 import { EventEmitter } from '../event/event-emitter';
+import { GameEvent } from '../event/event-factory';
 import {
     DOMEvents,
     GameKeyboardEvent,
@@ -70,41 +71,31 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
     }
 
     protected onMouseDown(e: CustomEvent<GameMouseEvent>) {
-        for (let i = this.layerStack.length - 1; i >= 0; i--) {
-            this.layerStack[i].dispatch('mouseDown', e);
-        }
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('mouseDown', e));
     }
 
     protected onMouseUp(e: CustomEvent<GameMouseEvent>) {
-        for (let i = this.layerStack.length - 1; i >= 0; i--) {
-            this.layerStack[i].dispatch('mouseUp', e);
-        }
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('mouseUp', e));
     }
 
     protected onMouseMove(e: CustomEvent<GameMouseEvent>) {
-        for (let i = this.layerStack.length - 1; i >= 0; i--) {
-            this.layerStack[i].dispatch('mouseMove', e);
-        }
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('mouseMove', e));
     }
 
     protected onScroll(e: CustomEvent<GameWheelEvent>) {
-        for (let i = this.layerStack.length - 1; i >= 0; i--) {
-            this.layerStack[i].dispatch('scroll', e);
-        }
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('scroll', e));
     }
 
     protected onMouseEnter(e: CustomEvent<GameMouseEvent>): void {
-        this.layerStack.forEach((layer) => layer.dispatch('mouseEnter', e));
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('mouseEnter', e));
     }
 
     protected onMouseOut(e: CustomEvent<GameMouseEvent>): void {
-        this.layerStack.forEach((layer) => layer.dispatch('mouseOut', e));
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('mouseOut', e));
     }
 
     protected onContextMenu(e: CustomEvent<GameMouseEvent>) {
-        for (let i = this.layerStack.length - 1; i >= 0; i--) {
-            this.layerStack[i].dispatch('contextMenu', e);
-        }
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('contextMenu', e));
     }
 
     protected onVisibilityChange(): void {
@@ -112,19 +103,19 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
     }
 
     protected onKeyDown(e: CustomEvent<GameKeyboardEvent>): void {
-        this.layerStack.forEach((layer) => layer.dispatch('keyDown', e));
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('keyDown', e));
     }
 
     protected onKeyUp(e: CustomEvent<GameKeyboardEvent>): void {
-        this.layerStack.forEach((layer) => layer.dispatch('keyUp', e));
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('keyUp', e));
     }
 
     protected onKeyboardDown(e: CustomEvent<GameKeyboardEvent>): void {
-        this.layerStack.forEach((layer) => layer.dispatch('keyboardDown', e));
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('keyboardDown', e));
     }
 
     protected onKeyboardUp(e: CustomEvent<GameKeyboardEvent>): void {
-        this.layerStack.forEach((layer) => layer.dispatch('keyboardUp', e));
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('keyboardUp', e));
     }
 
     private onFixedUpdate(): void {
@@ -140,5 +131,14 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         this.layerStack.forEach((layer) => layer.dispatch('render', e));
+    }
+
+    private dispatchInputToLayers(
+        event: CustomEvent<GameEvent>,
+        dispatch: (layer: Layer) => void,
+    ): void {
+        for (let i = this.layerStack.length - 1; i >= 0 && !event.detail.consumed; i--) {
+            dispatch(this.layerStack[i]);
+        }
     }
 }
