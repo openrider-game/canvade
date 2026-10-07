@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { UIText } from '../../src/canvade/ui/elements/ui-text';
-import { UIProperty } from '../../src/canvade/ui/ui-property.type';
+import { UIProperty } from '../../src/canvade/ui/properties/ui-property.type';
 import { createCanvasMock } from '../helpers/canvas';
 
 describe('UIText', () => {

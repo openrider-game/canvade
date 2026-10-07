@@ -2,13 +2,20 @@ import Vector from '../core/math/vector';
 import { EventEmitter } from '../event/event-emitter';
 import { EventFactory } from '../event/event-factory';
 import { GameClickEvent, UIEvents } from '../event/types/ui-events';
+import { UIAnimationController, UIAnimationTarget } from './animation/ui-animation-controller';
+import { UIAnimationOptions } from './animation/ui-animation';
+import { UIElementTree } from './tree/ui-element-tree';
+import { UIInteractionState, UIInteractionStateName } from './interaction/ui-interaction-state';
+import { ParentDimensionRule, ParentPositionRule } from './properties/ui-property-resolution';
 import {
     UIPropertyMap,
     UIPropertyValue,
     UIResolvableProperty,
     UIResolvableUnit,
     cloneUIPropertyMap,
-} from './ui-property.type';
+    mergeUIPropertyMap,
+} from './properties/ui-property.type';
+import { UIPropertyResolver } from './properties/ui-property-resolver';
 
 export interface UIBounds {
     x: number;
@@ -17,7 +24,7 @@ export interface UIBounds {
     height: number;
 }
 
-export type UIClickHandler = (x: number, y: number) => void;
+export type UIClickHandler = (x: number, y: number, target: UIElement) => void;
 
 export type UIElementProperties = UIPropertyMap & {
     x?: UIResolvableProperty<UIResolvableUnit>;
@@ -27,10 +34,10 @@ export type UIElementProperties = UIPropertyMap & {
 };
 
 const defaultElementProperties: UIElementProperties = {
-    x: new UIResolvableProperty('0px'),
-    y: new UIResolvableProperty('0px'),
-    width: new UIResolvableProperty('100px'),
-    height: new UIResolvableProperty('100px'),
+    x: new UIResolvableProperty('0px', new ParentPositionRule('x', 'width')),
+    y: new UIResolvableProperty('0px', new ParentPositionRule('y', 'height')),
+    width: new UIResolvableProperty('100px', new ParentDimensionRule('width')),
+    height: new UIResolvableProperty('100px', new ParentDimensionRule('height')),
 };
 
 export abstract class UIElement<
@@ -38,11 +45,13 @@ export abstract class UIElement<
 > extends EventEmitter<UIEvents> {
     public children: UIElement[] = [];
     public parent: UIElement | null = null;
+    public readonly data: Record<string, unknown> = {};
     public isTreeRoot = false;
-    private hovered = false;
-    private focused = false;
-    private active = false;
+    private readonly interactionState = new UIInteractionState();
     private clickHandlerId: string | null = null;
+    private readonly animationController: UIAnimationController<P>;
+    private readonly propertyResolver: UIPropertyResolver<P>;
+    protected layoutParentBounds?: UIBounds;
 
     constructor(
         public readonly type: string,
@@ -50,10 +59,13 @@ export abstract class UIElement<
         public readonly properties: P = defaultElementProperties as P,
     ) {
         super();
-        this.properties = {
-            ...cloneUIPropertyMap(defaultElementProperties),
-            ...cloneUIPropertyMap(properties),
-        } as P;
+        this.properties = cloneUIPropertyMap(
+            mergeUIPropertyMap(defaultElementProperties, properties),
+        ) as P;
+        this.propertyResolver = new UIPropertyResolver(this.properties);
+        this.animationController = new UIAnimationController(this.properties, (property, value) =>
+            this.resolveAnimationEndpoint(property, value),
+        );
     }
 
     public render(ctx: CanvasRenderingContext2D, parentBounds?: UIBounds): void {
@@ -75,31 +87,13 @@ export abstract class UIElement<
     protected abstract renderElement(ctx: CanvasRenderingContext2D): void;
 
     protected renderChildren(ctx: CanvasRenderingContext2D, parentBounds: UIBounds): void {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(parentBounds.x, parentBounds.y, parentBounds.width, parentBounds.height);
-        ctx.clip();
-        try {
-            for (const child of this.children) {
-                if (child instanceof UIElement) {
-                    child.render(ctx, parentBounds);
-                }
-            }
-        } finally {
-            ctx.restore();
-        }
+        UIElementTree.renderChildren(this.children, ctx, parentBounds);
     }
 
     public resolveLayout(parentBounds: UIBounds): void {
-        this.p('x').setValue(parentBounds.x + this.p('x').getResolved(parentBounds.width));
-        this.p('y').setValue(parentBounds.y + this.p('y').getResolved(parentBounds.height));
-        this.p('width').setValue(this.p('width').getResolved(parentBounds.width));
-        this.p('height').setValue(this.p('height').getResolved(parentBounds.height));
-        this.resolveProperties(parentBounds);
-    }
-
-    protected resolveProperties(parentBounds: UIBounds): void {
-        void parentBounds;
+        this.layoutParentBounds = parentBounds;
+        this.propertyResolver.resolve(parentBounds);
+        this.animationController.update(0);
     }
 
     public getBounds(): UIBounds {
@@ -121,98 +115,44 @@ export abstract class UIElement<
     }
 
     public findElementAt(x: number, y: number): UIElement | null {
-        if (!this.contains(x, y)) {
-            return null;
-        }
-
-        for (let i = this.children.length - 1; i >= 0; i--) {
-            const child = this.children[i];
-            if (child instanceof UIElement) {
-                const match = child.findElementAt(x, y);
-                if (match) {
-                    return match;
-                }
-            }
-        }
-
-        return this.isTreeRoot ? null : this;
+        return UIElementTree.findElementAt(this, x, y);
     }
 
     public setHoveredElement(target: UIElement | null): void {
-        const hovered = this === target;
-        if (this.hovered !== hovered) {
-            this.hovered = hovered;
-            this.dispatch(hovered ? 'hoverIn' : 'hoverOut');
-        }
-
-        for (const child of this.children) {
-            if (child instanceof UIElement) {
-                child.setHoveredElement(target);
-            }
-        }
+        UIElementTree.updateInteraction(this, target, 'hovered');
     }
 
     public setFocusedElement(target: UIElement | null): void {
-        const focused = this === target;
-        if (this.focused !== focused) {
-            this.focused = focused;
-            this.dispatch(focused ? 'focusIn' : 'focusOut');
-        }
-
-        for (const child of this.children) {
-            if (child instanceof UIElement) {
-                child.setFocusedElement(target);
-            }
-        }
+        UIElementTree.updateInteraction(this, target, 'focused');
     }
 
     public setActiveElement(target: UIElement | null): void {
-        this.active = this === target;
-
-        for (const child of this.children) {
-            if (child instanceof UIElement) {
-                child.setActiveElement(target);
-            }
-        }
+        UIElementTree.updateInteraction(this, target, 'active');
     }
 
     public isHovered(): boolean {
-        return this.hovered;
+        return this.interactionState.isHovered();
     }
 
     public isFocused(): boolean {
-        return this.focused;
+        return this.interactionState.isFocused();
     }
 
     public isActive(): boolean {
-        return this.active;
+        return this.interactionState.isActive();
     }
 
     public handleClick(x: number, y: number, mouseEvent: MouseEvent): boolean {
-        if (!this.contains(x, y)) {
-            return false;
-        }
-
-        for (let i = this.children.length - 1; i >= 0; i--) {
-            const child = this.children[i];
-            if (child instanceof UIElement) {
-                if (child.handleClick(x, y, mouseEvent)) {
-                    return true;
-                }
-            }
-        }
-
-        this.dispatch(
-            'click',
-            EventFactory.createGameEvent<GameClickEvent>({
-                name: 'click',
-                consumed: false,
-                mouseEvent,
-                position: new Vector(x, y),
-                target: this,
-            }),
+        return UIElementTree.handleClick(this, x, y, (target) =>
+            target.dispatchClick(x, y, mouseEvent),
         );
-        return true;
+    }
+
+    public updateInteractionState(state: UIInteractionStateName, value: boolean): void {
+        const event = this.interactionState.update(state, value);
+        if (event) {
+            this.dispatch(event);
+        }
     }
 
     public onClick(handler: UIClickHandler): void {
@@ -220,7 +160,7 @@ export abstract class UIElement<
             this.unsubscribe('click', this.clickHandlerId);
         }
         this.clickHandlerId = this.subscribe('click', (event) => {
-            handler(event.detail.position.x, event.detail.position.y);
+            handler(event.detail.position.x, event.detail.position.y, event.detail.target);
         });
     }
 
@@ -259,6 +199,26 @@ export abstract class UIElement<
         return this.properties[key];
     }
 
+    public animate<K extends keyof P & string>(
+        property: K,
+        target: UIAnimationTarget<NonNullable<P[K]>>,
+        options: UIAnimationOptions,
+    ): void {
+        this.animationController.animate(property, target, options);
+    }
+
+    public cancelAnimation<K extends keyof P & string>(property: K): void {
+        this.animationController.cancel(property);
+    }
+
+    public updateAnimations(delta: number): void {
+        this.animationController.update(delta);
+
+        for (const child of this.children) {
+            child.updateAnimations(delta);
+        }
+    }
+
     public addChild(child: UIElement): void {
         this.children.push(child);
         child.parent = this;
@@ -270,5 +230,25 @@ export abstract class UIElement<
             this.children.splice(index, 1);
             child.parent = null;
         }
+    }
+
+    private resolveAnimationEndpoint(property: string, endpoint: UIResolvableUnit): number {
+        if (!this.layoutParentBounds) {
+            throw new Error(`UI property "${property}" must be laid out before it can be animated`);
+        }
+        return this.propertyResolver.resolveValue(property, endpoint, this.layoutParentBounds);
+    }
+
+    private dispatchClick(x: number, y: number, mouseEvent: MouseEvent): void {
+        this.dispatch(
+            'click',
+            EventFactory.createGameEvent<GameClickEvent>({
+                name: 'click',
+                consumed: false,
+                mouseEvent,
+                position: new Vector(x, y),
+                target: this,
+            }),
+        );
     }
 }

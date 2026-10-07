@@ -1,6 +1,10 @@
 import { EventEmitter } from '../../event/event-emitter';
 import { DOMEvents, GameMouseEvent } from '../../event/types/dom-events';
-import { GameLoopEvents, GameRenderEvent } from '../../event/types/game-loop-events';
+import {
+    GameLoopEvents,
+    GameRenderEvent,
+    GameUpdateEvent,
+} from '../../event/types/game-loop-events';
 import { StateEvents } from '../../event/types/state-events';
 import { UIManager } from '../../ui/ui-manager';
 
@@ -11,31 +15,36 @@ export abstract class Layer extends EventEmitter<DOMEvents & StateEvents & GameL
         super();
 
         this.initLayer();
-        this.subscribe('render', this.forwardRenderToUI);
-        this.subscribe('mouseDown', this.forwardMouseDownToUI);
-        this.subscribe('mouseMove', this.forwardMouseMoveToUI);
-        this.subscribe('mouseUp', this.forwardMouseUpToUI);
+        this.subscribe('update', this.updateUI);
+        this.subscribe('render', this.renderUI);
+        this.subscribe('mouseDown', this.mouseDownUI);
+        this.subscribe('mouseMove', this.mouseMoveUI);
+        this.subscribe('mouseUp', this.mouseUpUI);
     }
 
     abstract initLayer(): void;
 
-    private forwardRenderToUI(event: CustomEvent<GameRenderEvent>): void {
+    private renderUI(event: CustomEvent<GameRenderEvent>): void {
         this.uiRenderer.dispatch('render', event);
     }
 
-    private forwardMouseUpToUI(event: CustomEvent<GameMouseEvent>): void {
+    private updateUI(event: CustomEvent<GameUpdateEvent>): void {
+        this.uiRenderer.dispatch('update', event);
+    }
+
+    private mouseUpUI(event: CustomEvent<GameMouseEvent>): void {
         if (!event.detail.consumed) {
             this.uiRenderer.dispatch('mouseUp', event);
         }
     }
 
-    private forwardMouseDownToUI(event: CustomEvent<GameMouseEvent>): void {
+    private mouseDownUI(event: CustomEvent<GameMouseEvent>): void {
         if (!event.detail.consumed) {
             this.uiRenderer.dispatch('mouseDown', event);
         }
     }
 
-    private forwardMouseMoveToUI(event: CustomEvent<GameMouseEvent>): void {
+    private mouseMoveUI(event: CustomEvent<GameMouseEvent>): void {
         if (!event.detail.consumed) {
             this.uiRenderer.dispatch('mouseMove', event);
         }

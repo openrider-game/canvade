@@ -3,7 +3,10 @@ import { UIButton } from '../../src/canvade/ui/elements/ui-button';
 import { UIContainer } from '../../src/canvade/ui/elements/ui-container';
 import { UIElementFactory } from '../../src/canvade/ui/ui-element-factory';
 import { buildUIElementTree } from '../../src/canvade/ui/ui-parser';
-import { createUIProperty, UIResolvableProperty } from '../../src/canvade/ui/ui-property.type';
+import {
+    createUIProperty,
+    UIResolvableProperty,
+} from '../../src/canvade/ui/properties/ui-property.type';
 
 const structure = [{ 'container.shell': ['button.primary'] }];
 
@@ -80,10 +83,32 @@ describe('buildUIElementTree', () => {
         root.children[0].subscribe('click', emittedClick);
         expect(root.handleClick(20, 20, {} as MouseEvent)).toBe(true);
         expect(clickHandler).toHaveBeenCalledOnce();
-        expect(clickHandler).toHaveBeenCalledWith(20, 20);
+        expect(clickHandler).toHaveBeenCalledWith(20, 20, root.children[0]);
         expect(emittedClick).toHaveBeenCalledOnce();
         expect(emittedClick.mock.calls[0][0].detail.target).toBe(root.children[0]);
         expect(emittedClick.mock.calls[0][0].detail.position).toEqual({ x: 20, y: 20 });
+    });
+
+    test('initializes custom element data from the structure definition', () => {
+        const root = buildUIElementTree([
+            {
+                'button.toggle': {
+                    data: { expanded: false },
+                    events: {
+                        click: (_x, _y, target) => {
+                            target.data.expanded = target.data.expanded !== true;
+                        },
+                    },
+                },
+            },
+        ]);
+        root.resolveLayout({ x: 0, y: 0, width: 200, height: 100 });
+        const button = root.children[0];
+        button.resolveLayout(root.getBounds());
+
+        expect(button.data.expanded).toBe(false);
+        root.handleClick(20, 20, {} as MouseEvent);
+        expect(button.data.expanded).toBe(true);
     });
 
     test('emits focus transition events from UI elements', () => {

@@ -1,4 +1,10 @@
-import { Cloneable } from '../core/cloneable.interface';
+import { Cloneable } from '../../core/cloneable.interface';
+import {
+    ParentDimensionRule,
+    UIPropertyResolutionContext,
+    UIPropertyResolutionRule,
+    resolveUIUnit,
+} from './ui-property-resolution';
 
 export type UIPixel = `${number}px`;
 export type UIPercentage = `${number}%`;
@@ -26,7 +32,10 @@ export class UIResolvableProperty<T extends UIResolvableUnit>
     extends UIProperty<number | null>
     implements Cloneable<UIResolvableProperty<T>>
 {
-    constructor(public declared: T) {
+    constructor(
+        public declared: T,
+        public readonly rule: UIPropertyResolutionRule = new ParentDimensionRule('width'),
+    ) {
         super(null);
     }
 
@@ -40,7 +49,7 @@ export class UIResolvableProperty<T extends UIResolvableUnit>
     }
 
     public override clone(): UIResolvableProperty<T> {
-        const property = new UIResolvableProperty(this.declared);
+        const property = new UIResolvableProperty(this.declared, this.rule);
         property._value = this._value;
         return property;
     }
@@ -58,24 +67,15 @@ export class UIResolvableProperty<T extends UIResolvableUnit>
     }
 
     public getResolved(reference: number): number {
-        switch (true) {
-            case this.declared.endsWith('px'): {
-                const amount = Number(this.declared.slice(0, -2));
-                if (Number.isFinite(amount) && this.declared.slice(0, -2).trim() !== '') {
-                    return amount;
-                }
-                break;
-            }
-            case this.declared.endsWith('%'): {
-                const amount = Number(this.declared.slice(0, -1));
-                if (Number.isFinite(amount) && this.declared.slice(0, -1).trim() !== '') {
-                    return (amount / 100) * reference;
-                }
-                break;
-            }
-        }
+        return resolveUIUnit(this.declared, reference);
+    }
 
-        throw new Error(`Invalid UI unit: ${this.declared}`);
+    public resolve(context: UIPropertyResolutionContext): number {
+        return this.rule.resolve(this.declared, context);
+    }
+
+    public resolveValue(value: T, context: UIPropertyResolutionContext): number {
+        return this.rule.resolve(value, context);
     }
 }
 
@@ -88,6 +88,22 @@ export function cloneUIPropertyMap<P extends UIPropertyMap>(properties: P): P {
     ) as P;
 }
 
+export function mergeUIPropertyMap<P extends UIPropertyMap>(defaults: P, overrides: Partial<P>): P {
+    const properties: UIPropertyMap = { ...defaults, ...overrides };
+
+    for (const [name, defaultProperty] of Object.entries(defaults)) {
+        const property = properties[name];
+        if (
+            defaultProperty instanceof UIResolvableProperty &&
+            property instanceof UIResolvableProperty
+        ) {
+            properties[name] = new UIResolvableProperty(property.declared, defaultProperty.rule);
+        }
+    }
+
+    return properties as P;
+}
+
 export function createUIProperty(
     name: string,
     value: UIUnit,
@@ -95,15 +111,15 @@ export function createUIProperty(
 ): UIPropertyInstance {
     if (defaultProperty instanceof UIResolvableProperty) {
         if (typeof value === 'number') {
-            return new UIResolvableProperty(`${value}px` as UIPixel);
+            return new UIResolvableProperty(`${value}px` as UIPixel, defaultProperty.rule);
         }
 
         if (typeof value === 'string') {
             switch (true) {
                 case value.endsWith('px'):
-                    return new UIResolvableProperty(value as UIPixel);
+                    return new UIResolvableProperty(value as UIPixel, defaultProperty.rule);
                 case value.endsWith('%'):
-                    return new UIResolvableProperty(value as UIPercentage);
+                    return new UIResolvableProperty(value as UIPercentage, defaultProperty.rule);
             }
         }
 

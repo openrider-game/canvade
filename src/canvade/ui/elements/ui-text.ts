@@ -1,5 +1,5 @@
 import { UIElement, UIElementProperties } from '../ui-element';
-import { UIProperty } from '../ui-property.type';
+import { UIProperty } from '../properties/ui-property.type';
 
 type UITextProperties = UIElementProperties & {
     color?: UIProperty<string>;

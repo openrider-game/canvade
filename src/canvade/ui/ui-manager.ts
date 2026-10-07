@@ -1,6 +1,10 @@
 import { EventEmitter } from '../event/event-emitter';
 import { DOMEvents, GameMouseEvent } from '../event/types/dom-events';
-import { GameLoopEvents, GameRenderEvent } from '../event/types/game-loop-events';
+import {
+    GameLoopEvents,
+    GameRenderEvent,
+    GameUpdateEvent,
+} from '../event/types/game-loop-events';
 import { StateEvents } from '../event/types/state-events';
 import { UIElement } from './ui-element';
 import { buildUIElementTree, UIStructureDefinition, UIStyleDefinition } from './ui-parser';
@@ -14,6 +18,7 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
     ) {
         super();
         this.subscribe('render', this.onRender);
+        this.subscribe('update', this.onUpdate);
         this.subscribe('mouseDown', this.onMouseDown);
         this.subscribe('mouseMove', this.onMouseMove);
         this.subscribe('mouseUp', this.onMouseUp);
@@ -45,6 +50,10 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
 
     private onRender(event: CustomEvent<GameRenderEvent>): void {
         this.render(event.detail.ctx);
+    }
+
+    private onUpdate(event: CustomEvent<GameUpdateEvent>): void {
+        this.rootNode?.updateAnimations(event.detail.delta);
     }
 
     private onMouseDown(event: CustomEvent<GameMouseEvent>): void {

@@ -1,10 +1,11 @@
 import { UIClickHandler, UIElement } from './ui-element';
 import { UIElementFactory } from './ui-element-factory';
-import { createUIProperty, UIPropertyInstance, UIUnit } from './ui-property.type';
+import { createUIProperty, UIPropertyInstance, UIUnit } from './properties/ui-property.type';
 
 export interface UIStructureElementDefinition {
     children?: UIStructureDefinition;
     events?: UIStructureEvents;
+    data?: Record<string, unknown>;
 }
 
 export interface UIStructureEvents {
@@ -22,6 +23,7 @@ interface ElementDescriptor {
     classNames: string[];
     children: ElementDescriptor[];
     events?: UIStructureEvents;
+    data?: Record<string, unknown>;
     parent?: ElementDescriptor;
 }
 
@@ -69,6 +71,7 @@ function parseStructure(
                 node.children = parseStructure(definitionForElement, node);
             } else if (definitionForElement && typeof definitionForElement === 'object') {
                 node.events = definitionForElement.events;
+                node.data = definitionForElement.data;
                 node.children = parseStructure(definitionForElement.children ?? [], node);
             } else {
                 throw new Error(`Invalid definition for UI element "${descriptor}"`);
@@ -135,6 +138,7 @@ function buildElement(
         : computeProperties(rules, [...ancestors, descriptor]);
     const element = createElement(descriptor, properties);
     element.isTreeRoot = isTreeRoot;
+    Object.assign(element.data, descriptor.data);
     const clickHandler = descriptor.events?.click;
     if (clickHandler !== undefined) {
         if (typeof clickHandler !== 'function') {

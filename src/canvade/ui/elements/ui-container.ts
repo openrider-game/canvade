@@ -1,5 +1,11 @@
 import { UIBounds, UIElement, UIElementProperties } from '../ui-element';
-import { UIProperty, UIResolvableProperty, UIResolvableUnit } from '../ui-property.type';
+import { ContainerGapRule, ContainerPaddingRule } from '../properties/ui-property-resolution';
+import {
+    mergeUIPropertyMap,
+    UIProperty,
+    UIResolvableProperty,
+    UIResolvableUnit,
+} from '../properties/ui-property.type';
 
 type UIContainerProperties = UIElementProperties & {
     backgroundColor?: UIProperty<string>;
@@ -12,22 +18,18 @@ type UIContainerProperties = UIElementProperties & {
 const defaultUIContainerProperties: UIContainerProperties = {
     backgroundColor: new UIProperty('transparent'),
     color: new UIProperty('black'),
-    gap: new UIResolvableProperty('0px'),
-    padding: new UIResolvableProperty('0px'),
+    gap: new UIResolvableProperty('0px', new ContainerGapRule()),
+    padding: new UIResolvableProperty('0px', new ContainerPaddingRule()),
     flexDirection: new UIProperty<'row' | 'column'>('column'),
 };
 
 export class UIContainer extends UIElement<UIContainerProperties> {
     constructor(classNames: string[] = [], properties: UIContainerProperties = {}) {
-        super('container', classNames, { ...defaultUIContainerProperties, ...properties });
-    }
-
-    protected override resolveProperties(parentBounds: UIBounds): void {
-        const referenceUnit =
-            this.v('flexDirection') === 'row' ? parentBounds.width : parentBounds.height;
-
-        this.p('gap').setValue(this.p('gap').getResolved(referenceUnit));
-        this.p('padding').setValue(this.p('padding').getResolved(parentBounds.width));
+        super(
+            'container',
+            classNames,
+            mergeUIPropertyMap(defaultUIContainerProperties, properties),
+        );
     }
 
     protected override renderElement(ctx: CanvasRenderingContext2D): void {

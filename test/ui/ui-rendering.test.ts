@@ -8,7 +8,7 @@ import { State } from '../../src/canvade/state/state';
 import { UIButton } from '../../src/canvade/ui/elements/ui-button';
 import { UIManager } from '../../src/canvade/ui/ui-manager';
 import { buildUIElementTree } from '../../src/canvade/ui/ui-parser';
-import { UIProperty } from '../../src/canvade/ui/ui-property.type';
+import { UIProperty } from '../../src/canvade/ui/properties/ui-property.type';
 import { createCanvasMock } from '../helpers/canvas';
 
 class TestLayer extends Layer {
@@ -262,7 +262,7 @@ describe('UI rendering and interaction', () => {
         layer.uiRenderer.dispatch('mouseUp', matchingMouseUp);
 
         expect(startClick).toHaveBeenCalledOnce();
-        expect(startClick).toHaveBeenCalledWith(10, 20);
+        expect(startClick).toHaveBeenCalledWith(10, 20, content.children[0]);
         expect(settingsClick).not.toHaveBeenCalled();
 
         const overlapMouseDown = new CustomEvent<GameMouseEvent>('mouseDown', {
@@ -287,7 +287,7 @@ describe('UI rendering and interaction', () => {
 
         expect(startClick).toHaveBeenCalledOnce();
         expect(settingsClick).toHaveBeenCalledOnce();
-        expect(settingsClick).toHaveBeenCalledWith(30, 20);
+        expect(settingsClick).toHaveBeenCalledWith(30, 20, content.children[1]);
     });
 
     test('clears focus and active state in the previous layer UI manager', () => {
