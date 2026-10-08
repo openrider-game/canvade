@@ -1,4 +1,4 @@
-import Vector from '../core/math/vector';
+import { Vector } from '../core/math/vector';
 import { World } from './world';
 
 export abstract class WorldVector {

@@ -1,4 +1,4 @@
-import Vector from '../../core/math/vector';
+import { Vector } from '../../core/math/vector';
 
 export abstract class Mouse {
     public static worldPos: Vector = new Vector();

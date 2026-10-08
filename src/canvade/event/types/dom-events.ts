@@ -1,4 +1,4 @@
-import Vector from '../../core/math/vector';
+import { Vector } from '../../core/math/vector';
 import { GameEvent } from '../event-factory';
 
 export type GameMouseEvent = GameEvent & { mouseEvent: MouseEvent; position: Vector };

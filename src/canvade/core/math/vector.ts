@@ -1,7 +1,7 @@
 import { Cloneable } from '../cloneable.interface';
 import { Serializable } from '../serializable.interface';
 
-export default class Vector implements Cloneable<Vector>, Serializable {
+export class Vector implements Cloneable<Vector>, Serializable {
     public constructor(
         public x: number = 0,
         public y: number = 0,

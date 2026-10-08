@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import Vector from '../../src/canvade/core/math/vector';
+import { Vector } from '../../src/canvade/core/math/vector';
 import { World } from '../../src/canvade/world/world';
 import { WorldVector } from '../../src/canvade/world/world-vector';
 

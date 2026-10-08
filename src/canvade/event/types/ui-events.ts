@@ -1,7 +1,7 @@
+import { Vector } from '../../core/math/vector';
 import { UIElement } from '../../ui/ui-element';
 import { GameEvent } from '../event-factory';
 import { GameRenderEvent } from './game-loop-events';
-import Vector from '../../core/math/vector';
 
 export type GameClickEvent = GameEvent & {
     mouseEvent: MouseEvent;

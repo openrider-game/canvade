@@ -1,12 +1,12 @@
-import Vector from '../core/math/vector';
+import { Vector } from '../core/math/vector';
 import { EventEmitter } from '../event/event-emitter';
 import { EventFactory } from '../event/event-factory';
 import { GameClickEvent, UIEvents } from '../event/types/ui-events';
-import { UIAnimationController, UIAnimationTarget } from './animation/ui-animation-controller';
 import { UIAnimationOptions } from './animation/ui-animation';
-import { UIElementTree } from './tree/ui-element-tree';
+import { UIAnimationController, UIAnimationTarget } from './animation/ui-animation-controller';
 import { UIInteractionState, UIInteractionStateName } from './interaction/ui-interaction-state';
 import { ParentDimensionRule, ParentPositionRule } from './properties/ui-property-resolution';
+import { UIPropertyResolver } from './properties/ui-property-resolver';
 import {
     UIPropertyMap,
     UIPropertyValue,
@@ -15,7 +15,7 @@ import {
     cloneUIPropertyMap,
     mergeUIPropertyMap,
 } from './properties/ui-property.type';
-import { UIPropertyResolver } from './properties/ui-property-resolver';
+import { UIElementTree } from './tree/ui-element-tree';
 
 export interface UIBounds {
     x: number;

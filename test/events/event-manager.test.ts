@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import Vector from '../../src/canvade/core/math/vector';
+import { Vector } from '../../src/canvade/core/math/vector';
 import { EventManager } from '../../src/canvade/event/event-manager';
 import { World } from '../../src/canvade/world/world';
 import { createCanvasMock } from '../helpers/canvas';

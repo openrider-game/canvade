@@ -1,4 +1,4 @@
-import Vector from '../core/math/vector';
+import { Vector } from '../core/math/vector';
 import { StateManager } from '../state/state-manager';
 import { WorldVector } from '../world/world-vector';
 import { EventFactory } from './event-factory';

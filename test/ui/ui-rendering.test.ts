@@ -1,14 +1,14 @@
 import { describe, expect, test, vi } from 'vitest';
-import Vector from '../../src/canvade/core/math/vector';
+import { Vector } from '../../src/canvade/core/math/vector';
 import { EventManager } from '../../src/canvade/event/event-manager';
 import { GameMouseEvent } from '../../src/canvade/event/types/dom-events';
 import { GameRenderEvent } from '../../src/canvade/event/types/game-loop-events';
 import { Layer } from '../../src/canvade/state/layer/layer';
 import { State } from '../../src/canvade/state/state';
 import { UIButton } from '../../src/canvade/ui/elements/ui-button';
+import { UIProperty } from '../../src/canvade/ui/properties/ui-property.type';
 import { UIManager } from '../../src/canvade/ui/ui-manager';
 import { buildUIElementTree } from '../../src/canvade/ui/ui-parser';
-import { UIProperty } from '../../src/canvade/ui/properties/ui-property.type';
 import { createCanvasMock } from '../helpers/canvas';
 
 class TestLayer extends Layer {
