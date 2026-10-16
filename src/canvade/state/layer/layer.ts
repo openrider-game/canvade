@@ -8,7 +8,17 @@ import {
 import { StateEvents } from '../../event/types/state-events';
 import { UIManager } from '../../ui/ui-manager';
 
+/**
+ * A layer of a `State`, receiving the events forwarded by its state.
+ *
+ * Subclasses subscribe to the events they need in {@link Layer.initLayer}. Each layer owns a
+ * {@link UIManager}, which receives `update`, `render`, `mouseDown`, `mouseMove` and `mouseUp`
+ * after the receivers subscribed in `initLayer`: the UI is drawn over the layer content, and a
+ * receiver can set the `consumed` flag of a mouse event to hide it from the UI. When the UI
+ * handles a mouse event, it consumes it, so the layers below do not receive it.
+ */
 export abstract class Layer extends EventEmitter<DOMEvents & StateEvents & GameLoopEvents> {
+    /** UI of the layer, set with {@link UIManager.setUI}. */
     public readonly uiRenderer = new UIManager();
 
     constructor() {
@@ -22,6 +32,11 @@ export abstract class Layer extends EventEmitter<DOMEvents & StateEvents & GameL
         this.subscribe('mouseUp', this.mouseUpUI);
     }
 
+    /**
+     * Initializes the layer and subscribes to its events.
+     *
+     * Called by the base constructor, so before the field initializers of the subclass run.
+     */
     abstract initLayer(): void;
 
     private renderUI(event: CustomEvent<GameRenderEvent>): void {

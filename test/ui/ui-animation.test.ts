@@ -142,8 +142,10 @@ describe('UI animations', () => {
 
     test('uses the correct layout reference for container gap animations', () => {
         const container = new UIContainer([], {
+            width: new UIResolvableProperty('180px'),
             flexDirection: new UIProperty('row'),
             gap: new UIResolvableProperty('10%'),
+            padding: new UIResolvableProperty('10px'),
         });
         container.resolveLayout({ x: 0, y: 0, width: 200, height: 100 });
 
@@ -153,7 +155,46 @@ describe('UI animations', () => {
         });
         container.updateAnimations(50);
 
-        expect(container.v('gap')).toBe(60);
+        // Relative to the content width of the container: 180 - 2 * 10
+        expect(container.v('gap')).toBe((16 + 80) / 2);
+    });
+
+    test('cancels an animation where it is and gives the property back to the layout', () => {
+        const button = new UIButton();
+        button.resolveLayout({ x: 0, y: 0, width: 200, height: 100 });
+
+        button.animate('x', '50%', { duration: 100, easing: (progress) => progress });
+        button.updateAnimations(50);
+        button.cancelAnimation('x');
+
+        expect(button.v('x')).toBe(50);
+        expect(button.p('x').getDeclared()).toBe('50px');
+
+        // The layout follows the parent again, from the value the animation stopped at
+        button.resolveLayout({ x: 10, y: 0, width: 400, height: 100 });
+        button.updateAnimations(50);
+        expect(button.v('x')).toBe(60);
+    });
+
+    test('cancels the animation of a numeric property at its current value', () => {
+        const text = new UIText();
+        text.resolveLayout({ x: 0, y: 0, width: 200, height: 100 });
+
+        text.animate('fontSize', 30, { duration: 100, easing: (progress) => progress });
+        text.updateAnimations(50);
+        text.cancelAnimation('fontSize');
+        text.updateAnimations(50);
+
+        expect(text.v('fontSize')).toBe(22);
+    });
+
+    test('ignores the cancellation of a property that is not animated', () => {
+        const button = new UIButton();
+        button.resolveLayout({ x: 0, y: 0, width: 200, height: 100 });
+
+        button.cancelAnimation('x');
+
+        expect(button.p('x').getDeclared()).toBe('0px');
     });
 
     test('retains custom resolution rules when a style value replaces the default', () => {
@@ -170,6 +211,7 @@ describe('UI animations', () => {
             property.resolve({
                 parentBounds: { x: 10, y: 0, width: 200, height: 100 },
                 getValue: () => null,
+                resolveProperty: () => 0,
             }),
         ).toBe(60);
     });

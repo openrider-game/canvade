@@ -1,7 +1,13 @@
 import type { UIElement } from '../ui-element';
 import { UIInteractionStateName } from '../interaction/ui-interaction-state';
 
+/** Recursive operations on UI element trees, used by {@link UIElement}. */
 export class UIElementTree {
+    /**
+     * Renders children in order, all laid out in `parentBounds` and clipped to it.
+     *
+     * @param parentBounds - Bounds of the parent, in canvas pixels.
+     */
     public static renderChildren(
         children: UIElement[],
         ctx: CanvasRenderingContext2D,
@@ -20,6 +26,12 @@ export class UIElementTree {
         }
     }
 
+    /**
+     * Returns the deepest element of a subtree at a canvas position, or `null`.
+     *
+     * Children are tested from the last one, drawn on top. A tree root is never returned, so
+     * that positions over the root only are not captured by the UI.
+     */
     public static findElementAt(element: UIElement, x: number, y: number): UIElement | null {
         if (!element.contains(x, y)) {
             return null;
@@ -35,6 +47,10 @@ export class UIElementTree {
         return element.isTreeRoot ? null : element;
     }
 
+    /**
+     * Sets an interaction state on `target` and clears it on every other element of the
+     * subtree.
+     */
     public static updateInteraction(
         element: UIElement,
         target: UIElement | null,
@@ -46,6 +62,12 @@ export class UIElementTree {
         }
     }
 
+    /**
+     * Calls `dispatchClick` on the deepest element of a subtree at a canvas position, the last
+     * children being tested first. Unlike hit tests, a tree root can receive the click.
+     *
+     * @returns Whether the position is inside `element`.
+     */
     public static handleClick(
         element: UIElement,
         x: number,

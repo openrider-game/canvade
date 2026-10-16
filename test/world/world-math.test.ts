@@ -4,12 +4,27 @@ import { World } from '../../src/canvade/world/world';
 import { WorldVector } from '../../src/canvade/world/world-vector';
 
 describe('World coordinates', () => {
-    test('normalizes canvas coordinates into world coordinates', () => {
+    test('converts canvas coordinates into world coordinates', () => {
         const world = createWorld(new Vector(10, 20), 2);
 
-        expect(WorldVector.normalizeToCanvas(new Vector(120, 70), world, 200, 100)).toEqual(
+        expect(WorldVector.toWorld(new Vector(120, 70), world, 200, 100)).toEqual(
             new Vector(20, 30),
         );
+    });
+
+    test('converts back and forth between canvas and world coordinates', () => {
+        const world = createWorld(new Vector(-35, 12), 0.6);
+        const pixel = new Vector(42, 17);
+
+        const roundTrip = WorldVector.toPixel(
+            WorldVector.toWorld(pixel, world, 700, 400),
+            world,
+            700,
+            400,
+        );
+
+        expect(roundTrip.x).toBeCloseTo(pixel.x);
+        expect(roundTrip.y).toBeCloseTo(pixel.y);
     });
 
     test('converts world coordinates to canvas pixels relative to the camera', () => {

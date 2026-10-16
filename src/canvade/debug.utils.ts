@@ -1,3 +1,4 @@
+/** Verbosity levels of {@link DebugUtils}, each level including the lower ones. */
 export enum DebugLevel {
     NONE = 0,
     ERROR = 1,
@@ -7,6 +8,13 @@ export enum DebugLevel {
     TRACE = 5,
 }
 
+/**
+ * Global console logger filtered by a {@link DebugLevel}.
+ *
+ * A message is logged only when its level is lower than or equal to the current debug level,
+ * which is {@link DebugLevel.NONE} until {@link DebugUtils.setDebugLevel} is called. The
+ * `Game` constructor sets it from its `debugLevel` option.
+ */
 export abstract class DebugUtils {
     private static debugLevel: DebugLevel = DebugLevel.NONE;
 
@@ -45,6 +53,7 @@ export abstract class DebugUtils {
         }
     }
 
+    /** Sets the debug level, which is global: it is shared by every game of the page. */
     public static setDebugLevel(debugLevel: DebugLevel) {
         this.debugLevel = debugLevel;
     }

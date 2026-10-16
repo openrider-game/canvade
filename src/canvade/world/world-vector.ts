@@ -1,8 +1,15 @@
 import { Vector } from '../core/math/vector';
 import { World } from './world';
 
+/** Conversions between canvas pixels and world units, given the camera of a {@link World}. */
 export abstract class WorldVector {
-    public static normalizeToCanvas(
+    /**
+     * Converts a canvas position, in pixels, to a world position.
+     *
+     * @param viewWidth - Width of the canvas, in pixels.
+     * @param viewHeight - Height of the canvas, in pixels.
+     */
+    public static toWorld(
         vec: Vector,
         world: World,
         viewWidth: number,
@@ -14,6 +21,12 @@ export abstract class WorldVector {
         );
     }
 
+    /**
+     * Converts a world position to a canvas position, in pixels.
+     *
+     * @param viewWidth - Width of the canvas, in pixels.
+     * @param viewHeight - Height of the canvas, in pixels.
+     */
     public static toPixel(
         vec: Vector,
         world: World,

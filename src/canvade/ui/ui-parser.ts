@@ -1,23 +1,63 @@
 import { UIClickHandler, UIElement } from './ui-element';
 import { UIElementFactory } from './ui-element-factory';
 import { createUIProperty, UIPropertyInstance, UIUnit } from './properties/ui-property.type';
+import {
+    UI_CLASS_SEPARATOR,
+    UI_CONTAINER_TYPE,
+    UI_ROOT_SIZE,
+    UI_TRANSPARENT,
+} from './ui.constants';
 
+/** Definition of an element with options, in a {@link UIStructureDefinition}. */
 export interface UIStructureElementDefinition {
     children?: UIStructureDefinition;
     events?: UIStructureEvents;
+    /** Free data copied to {@link UIElement.data}. */
     data?: Record<string, unknown>;
 }
 
+/** Event handlers of an element, in a {@link UIStructureElementDefinition}. */
 export interface UIStructureEvents {
     click?: UIClickHandler;
 }
 
+/**
+ * Structure of a UI tree: a list of elements, drawn in order (the last one on top).
+ *
+ * Each element is described by its type followed by its class names, separated by dots, e.g.
+ * `button.primary.large`. An entry is either such a descriptor (an element without children)
+ * or an object mapping descriptors to their children list or to a
+ * {@link UIStructureElementDefinition}:
+ *
+ * ```ts
+ * [
+ *     'text.title',
+ *     { 'container.menu': ['button.play', { 'button.quit': { events: { click: quit } } }] },
+ * ]
+ * ```
+ */
 export type UIStructureDefinition = Array<
     string | Record<string, UIStructureDefinition | UIStructureElementDefinition>
 >;
+/**
+ * Property values of a style rule, by property name.
+ *
+ * `px`/`%` properties accept a `px` or `%` string, or a number of pixels.
+ */
 export type UIStyleProperties = Record<string, UIUnit>;
+/**
+ * Style rules of a UI tree, keyed by CSS-like selectors.
+ *
+ * A selector is a list of parts separated by spaces, each part matching an element and the
+ * previous parts its ancestors (descendant combinator). A part is a type and class names
+ * separated by dots, the type being optional (`button`, `.primary`, `button.primary`).
+ *
+ * Every matching rule applies, from the lowest specificity to the highest, later rules winning
+ * between equal specificities. The specificity counts 10 per class name and 1 per type.
+ */
 export type UIStyleDefinition = Record<string, UIStyleProperties>;
 
+/** Element parsed from a structure definition, before its creation. */
 interface ElementDescriptor {
     type: string;
     classNames: string[];
@@ -27,6 +67,7 @@ interface ElementDescriptor {
     parent?: ElementDescriptor;
 }
 
+/** Part of a style selector matching one element; an empty type matches any type. */
 interface SelectorPart {
     type: string;
     classNames: string[];
@@ -35,16 +76,29 @@ interface SelectorPart {
 interface StyleRule {
     selector: SelectorPart[];
     specificity: number;
+    /** Position of the rule in the style definition, breaking specificity ties. */
     order: number;
     properties: UIStyleProperties;
 }
 
+/**
+ * Builds a UI tree from structure and style definitions.
+ *
+ * The elements of the structure are placed in an implicit root container covering the whole
+ * canvas (`100%` wide and high, transparent), which is ignored by hit tests. The root is not
+ * part of the structure: no style rule applies to it, and it is not an ancestor for the
+ * descendant selectors.
+ *
+ * @returns The root container.
+ * @throws When a definition is invalid, an element type is unknown or a `px`/`%` property gets
+ * another value.
+ */
 export function buildUIElementTree(
     structureDefinition: UIStructureDefinition,
     styleDefinition: UIStyleDefinition = {},
 ): UIElement {
     const rules = parseStyleRules(styleDefinition);
-    const root = createDescriptor('container');
+    const root = createDescriptor(UI_CONTAINER_TYPE);
     root.children = parseStructure(structureDefinition, root);
     return buildElement(root, rules, [], true);
 }
@@ -84,7 +138,7 @@ function parseStructure(
 }
 
 function createDescriptor(value: string, parent?: ElementDescriptor): ElementDescriptor {
-    const [type = '', ...classNames] = value.trim().split('.');
+    const [type = '', ...classNames] = value.trim().split(UI_CLASS_SEPARATOR);
     if (!type) {
         throw new Error(`Invalid UI element descriptor: "${value}"`);
     }
@@ -118,23 +172,25 @@ function parseStyleRules(styleDefinition: UIStyleDefinition): StyleRule[] {
 }
 
 function parseSelectorPart(value: string): SelectorPart {
-    const [type = '', ...classNames] = value.split('.');
+    const [type = '', ...classNames] = value.split(UI_CLASS_SEPARATOR);
     return { type, classNames: classNames.filter(Boolean) };
 }
 
+/**
+ * Creates an element and its subtree, applying the style rules matching each element.
+ *
+ * @param ancestors - Descriptors of the ancestors of the element for the descendant selectors,
+ * from the top level element to the parent, the implicit root being excluded.
+ */
 function buildElement(
     descriptor: ElementDescriptor,
     rules: StyleRule[],
     ancestors: ElementDescriptor[],
     isTreeRoot: boolean = false,
 ): UIElement {
+    // The implicit root is not part of the structure, so no style rule applies to it
     const properties = isTreeRoot
-        ? {
-              width: '100%',
-              height: '100%',
-              color: 'transparent',
-              ...computeProperties(rules, [...ancestors, descriptor]),
-          }
+        ? { width: UI_ROOT_SIZE, height: UI_ROOT_SIZE, color: UI_TRANSPARENT }
         : computeProperties(rules, [...ancestors, descriptor]);
     const element = createElement(descriptor, properties);
     element.isTreeRoot = isTreeRoot;
@@ -146,7 +202,7 @@ function buildElement(
         }
         element.onClick(clickHandler);
     }
-    const currentPath = [...ancestors, descriptor];
+    const currentPath = isTreeRoot ? [] : [...ancestors, descriptor];
 
     for (const child of descriptor.children) {
         element.addChild(buildElement(child, rules, currentPath));
@@ -155,6 +211,10 @@ function buildElement(
     return element;
 }
 
+/**
+ * Merges the properties of the rules matching the last element of `path`, from the lowest
+ * specificity to the highest, then in declaration order.
+ */
 function computeProperties(rules: StyleRule[], path: ElementDescriptor[]): UIStyleProperties {
     const matchingRules = rules
         .filter((rule) => matchesSelector(rule.selector, path))
@@ -167,6 +227,10 @@ function computeProperties(rules: StyleRule[], path: ElementDescriptor[]): UISty
     return properties;
 }
 
+/**
+ * Returns whether a selector matches the last element of `path`, its other parts matching
+ * ancestors of the element, in order but not necessarily direct parents.
+ */
 function matchesSelector(selector: SelectorPart[], path: ElementDescriptor[]): boolean {
     let pathIndex = path.length - 1;
     const lastSelector = selector[selector.length - 1];
@@ -176,6 +240,7 @@ function matchesSelector(selector: SelectorPart[], path: ElementDescriptor[]): b
     }
     pathIndex--;
 
+    // Match the remaining parts right to left, each against the nearest matching ancestor
     for (let selectorIndex = selector.length - 2; selectorIndex >= 0; selectorIndex--) {
         let matchIndex = pathIndex;
         while (matchIndex >= 0 && !matchesPart(selector[selectorIndex], path[matchIndex])) {
@@ -197,6 +262,11 @@ function matchesPart(selector: SelectorPart, element: ElementDescriptor): boolea
     );
 }
 
+/**
+ * Creates an element and replaces its default properties with the style declarations.
+ *
+ * Declarations of unknown properties create plain properties, readable with `UIElement.v`.
+ */
 function createElement(descriptor: ElementDescriptor, declarations: UIStyleProperties): UIElement {
     const element = UIElementFactory.createElement(descriptor.type, descriptor.classNames);
     const elementProperties = element.properties as Record<string, UIPropertyInstance>;

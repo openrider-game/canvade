@@ -1,3 +1,9 @@
+/**
+ * `KeyboardEvent.code` values of the keys, to bind with a `Control`.
+ *
+ * The letter codes (`KEYA` to `KEYZ`) match the letter typed with the current keyboard layout,
+ * the other codes match the physical key position.
+ */
 export const BACKSPACE = 'Backspace',
     TAB = 'Tab',
     ENTER = 'Enter',

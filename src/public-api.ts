@@ -1,3 +1,13 @@
+/**
+ * Canvade, a TypeScript engine for canvas browser games.
+ *
+ * A {@link Game} owns the canvas and runs the game loop. It drives a {@link StateManager}, a stack
+ * of {@link State | states} (screens) whose top state receives the game loop and input events.
+ * Each state is made of {@link Layer | layers}, which can host a declarative canvas UI through
+ * their {@link UIManager}.
+ *
+ * @packageDocumentation
+ */
 export * from './canvade/debug.utils';
 
 export * from './canvade/game';

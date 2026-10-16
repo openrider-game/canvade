@@ -4,7 +4,7 @@
     "description": "Engine for canvas based browser games",
     "main": "dist/public-api.js",
     "author": "tomiy",
-    "license": "ISC",
+    "license": "GPL-3.0",
     "scripts": {
         "prepare": "husky",
         "postinstall": "husky",

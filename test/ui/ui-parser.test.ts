@@ -3,6 +3,7 @@ import { UIButton } from '../../src/canvade/ui/elements/ui-button';
 import { UIContainer } from '../../src/canvade/ui/elements/ui-container';
 import { UIElementFactory } from '../../src/canvade/ui/ui-element-factory';
 import { buildUIElementTree } from '../../src/canvade/ui/ui-parser';
+import { createCanvasMock } from '../helpers/canvas';
 import {
     createUIProperty,
     UIResolvableProperty,
@@ -33,7 +34,8 @@ describe('buildUIElementTree', () => {
         expect(shell).toBeInstanceOf(UIContainer);
         expect(shell.v('backgroundColor')).toBe('blue');
         expect(shell.v('width')).toBe(100);
-        expect(shell.v('gap')).toBe(15);
+        // 12% of the shell own width
+        expect(shell.v('gap')).toBe(12);
         expect(shell.children[0]).toBeInstanceOf(UIButton);
         expect(shell.children[0].v('backgroundColor')).toBe('green');
         expect(shell.children[0].v('text')).toBe('Continue');
@@ -49,6 +51,22 @@ describe('buildUIElementTree', () => {
         expect(root.children).toHaveLength(2);
     });
 
+    test('applies no style rule to the implicit root', () => {
+        const root = buildUIElementTree([{ 'container.menu': ['button.inner'] }, 'button.top'], {
+            container: { width: 50, backgroundColor: 'red' },
+            'container button': { text: 'Nested' },
+        });
+        root.resolveLayout({ x: 0, y: 0, width: 200, height: 100 });
+        const [menu, top] = root.children;
+
+        expect(root.v('width')).toBe(200);
+        expect(root.v('backgroundColor')).toBe('transparent');
+        expect(menu.v('backgroundColor')).toBe('red');
+        // The root is not an ancestor for the descendant selectors
+        expect(menu.children[0].v('text')).toBe('Nested');
+        expect(top.v('text')).toBe('Button');
+    });
+
     test('applies a simple class selector only to the matching element', () => {
         const root = buildUIElementTree([{ 'container.parent': ['text.child'] }], {
             '.parent': { x: '10%', width: 80 },
@@ -61,6 +79,38 @@ describe('buildUIElementTree', () => {
         expect(parent.v('x')).toBe(20);
         expect(parent.children[0].v('x')).toBe(20);
         expect(parent.children[0].v('width')).toBe(100);
+    });
+
+    test('aligns elements from the right, bottom or center of their parent', () => {
+        const root = buildUIElementTree(['button.right', 'button.bottom', 'button.centered'], {
+            button: { width: 40, height: 20 },
+            '.right': { x: 10, y: 5, horizontalAlign: 'right' },
+            '.bottom': { x: '10%', y: 10, verticalAlign: 'bottom' },
+            '.centered': { x: 5, y: -5, horizontalAlign: 'center', verticalAlign: 'middle' },
+        });
+        root.resolveLayout({ x: 0, y: 0, width: 200, height: 100 });
+        const [right, bottom, centered] = root.children;
+        right.resolveLayout(root.getBounds());
+        bottom.resolveLayout(root.getBounds());
+        centered.resolveLayout(root.getBounds());
+
+        expect(right.getBounds()).toEqual({ x: 150, y: 5, width: 40, height: 20 });
+        expect(bottom.getBounds()).toEqual({ x: 20, y: 70, width: 40, height: 20 });
+        expect(centered.getBounds()).toEqual({ x: 85, y: 35, width: 40, height: 20 });
+    });
+
+    test('lays absolute children out of the container flow', () => {
+        const { canvas, context } = createCanvasMock(200, 100);
+        const root = buildUIElementTree(['button.first', 'button.overlay', 'button.second'], {
+            button: { width: 40, height: 20 },
+            '.overlay': { position: 'absolute', x: 10, y: 10, horizontalAlign: 'right' },
+        });
+        root.render(context, { x: 0, y: 0, width: canvas.width, height: canvas.height });
+        const [first, overlay, second] = root.children;
+
+        expect(first.getBounds()).toEqual({ x: 0, y: 0, width: 40, height: 20 });
+        expect(overlay.getBounds()).toEqual({ x: 150, y: 10, width: 40, height: 20 });
+        expect(second.getBounds()).toEqual({ x: 0, y: 20, width: 40, height: 20 });
     });
 
     test('factory creates the element registered for a tag', () => {

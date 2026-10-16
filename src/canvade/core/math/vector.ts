@@ -1,12 +1,19 @@
 import { Cloneable } from '../cloneable.interface';
 import { Serializable } from '../serializable.interface';
 
+/**
+ * Mutable 2D vector.
+ *
+ * Methods prefixed with `self` (and {@link Vector.set}) modify the vector in place and return it
+ * for chaining; the other operations return a new vector.
+ */
 export class Vector implements Cloneable<Vector>, Serializable {
     public constructor(
         public x: number = 0,
         public y: number = 0,
     ) {}
 
+    /** Copies the coordinates of another vector into this one. */
     public set(vector: Vector): Vector {
         this.x = vector.x;
         this.y = vector.y;
@@ -43,6 +50,7 @@ export class Vector implements Cloneable<Vector>, Serializable {
         return new Vector(this.x * factor, this.y * factor);
     }
 
+    /** Returns a new vector divided by `factor`. */
     public recipScale(factor: number): Vector {
         return new Vector(this.x / factor, this.y / factor);
     }
@@ -75,6 +83,10 @@ export class Vector implements Cloneable<Vector>, Serializable {
         return new Vector(this.x, this.y);
     }
 
+    /**
+     * Serializes the vector compactly: both coordinates rounded to integers, written in base 32
+     * and separated by a space.
+     */
     public toString(): string {
         return Math.round(this.x).toString(32) + ' ' + Math.round(this.y).toString(32);
     }

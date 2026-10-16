@@ -1,5 +1,12 @@
+/**
+ * Cubic Bézier curve from (0, 0) to (1, 1), used as a timing function.
+ *
+ * The constructor takes the coordinates of the two control points, (`p1`, `p2`) and
+ * (`p3`, `p4`), like the CSS `cubic-bezier()` function.
+ */
 export class UnitBezier {
-    private static epsilon: number = 1e-5; // Precision
+    /** Precision of the solver. */
+    private static epsilon: number = 1e-5;
 
     private cx: number;
     private bx: number;
@@ -9,8 +16,7 @@ export class UnitBezier {
     private ay: number;
 
     public constructor(p1: number, p2: number, p3: number, p4: number) {
-        // pre-calculate the polynomial coefficients
-        // First and last control points are implied to be (0,0) and (1.0, 1.0)
+        // Polynomial coefficients, the first and last control points being (0, 0) and (1, 1)
         this.cx = 3.0 * p1;
         this.bx = 3.0 * (p3 - p1) - this.cx;
         this.ax = 1.0 - this.cx - this.bx;
@@ -32,6 +38,7 @@ export class UnitBezier {
         return (3.0 * this.ax * progress + 2.0 * this.bx) * progress + this.cx;
     }
 
+    /** Finds the curve parameter whose x coordinate is `progress`. */
     private solveCurveX(progress: number) {
         let t0: number;
         let t1: number;
@@ -40,7 +47,7 @@ export class UnitBezier {
         let d2: number;
         let i: number;
 
-        // First try a few iterations of Newton's method -- normally very fast.
+        // First try a few iterations of Newton's method, which normally converges very fast
         for (t2 = progress, i = 0; i < 32; i++) {
             x2 = this.sampleCurveX(t2) - progress;
             if (Math.abs(x2) < UnitBezier.epsilon) return t2;
@@ -49,7 +56,7 @@ export class UnitBezier {
             t2 = t2 - x2 / d2;
         }
 
-        // No solution found - use bi-section
+        // No solution found, fall back to bisection
         t0 = 0.0;
         t1 = 1.0;
         t2 = progress;
@@ -66,11 +73,11 @@ export class UnitBezier {
             t2 = (t1 - t0) * 0.5 + t0;
         }
 
-        // Give up
+        // Give up and return the last estimate
         return t2;
     }
 
-    // Find new T as a function of Y along curve X
+    /** Returns the y coordinate of the curve at the x coordinate `progress`, in [0, 1]. */
     public solve(progress: number): number {
         return this.sampleCurveY(this.solveCurveX(progress));
     }

@@ -10,14 +10,34 @@ import { GameLoopEvents, GameRenderEvent, GameUpdateEvent } from '../event/types
 import { StateEvents } from '../event/types/state-events';
 import { World } from '../world/world';
 import { Layer } from './layer/layer';
+import type { StateManager } from './state-manager';
 
+/** Constructor of a {@link State}, instantiated by {@link StateManager.addState}. */
 export type StateClass<T extends State> = new () => T;
 
+/**
+ * A screen of the game (menu, level, editor...), made of a stack of {@link Layer | layers}.
+ *
+ * The state receives the game loop, input and lifecycle events from the {@link StateManager}
+ * while it is the current state, and forwards them to its layers:
+ * - `render` clears the canvas, then renders the layers from the first one (bottom) to the last
+ *   one (top);
+ * - the input events ({@link DOMEvents}) go to the layers from the top one down, and stop at the
+ *   first layer that sets the `consumed` flag of the event, so an overlay can capture the input;
+ * - the other events (`enter`, `leave`, `visibilityChange`, `fixedUpdate`, `update`) go to all
+ *   the layers, bottom to top.
+ *
+ * Subclasses override the protected `on*` handlers to react to an event, calling `super` to
+ * keep forwarding it to the layers.
+ */
 export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameLoopEvents> {
+    /** Layers of the state, by name, in the order returned by {@link State.initLayers}. */
     public layers: Map<string, Layer>;
+    /** Layers ordered from bottom to top. */
     protected layerStack: Layer[];
 
     private world?: World;
+    private stateManager?: StateManager;
 
     public constructor() {
         super();
@@ -51,15 +71,47 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
         this.subscribe('render', this.onRender);
     }
 
+    /**
+     * Initializes the state, before {@link State.initLayers}.
+     *
+     * Called by the base constructor, so before the field initializers of the subclass run, and
+     * before the state is attached to its manager.
+     */
     protected abstract initState(): void;
+    /**
+     * Creates the layers of the state, ordered from bottom to top.
+     *
+     * Called by the base constructor, after {@link State.initState}.
+     */
     protected abstract initLayers(): Map<string, Layer>;
 
+    /**
+     * Sets the world of the state, used to compute the world mouse positions of `Mouse`.
+     */
     public setWorld(world: World): void {
         this.world = world;
     }
 
     public getWorld(): World | undefined {
         return this.world;
+    }
+
+    /** Attaches the state to its manager. Called by {@link StateManager.addState}. */
+    public attachManager(manager: StateManager): void {
+        this.stateManager = manager;
+    }
+
+    /**
+     * Manager of the state, to push or pop states and to reach the data shared between states.
+     *
+     * @throws When the state is not attached to a manager yet, e.g. from `initState`.
+     */
+    public get manager(): StateManager {
+        if (!this.stateManager) {
+            throw new Error('State is not attached to a state manager');
+        }
+
+        return this.stateManager;
     }
 
     protected onEnter(): void {
@@ -133,6 +185,7 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
         this.layerStack.forEach((layer) => layer.dispatch('render', e));
     }
 
+    /** Dispatches an input event from the top layer down, until a layer consumes it. */
     private dispatchInputToLayers(
         event: CustomEvent<GameEvent>,
         dispatch: (layer: Layer) => void,

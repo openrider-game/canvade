@@ -1,6 +1,21 @@
 import { UIElement, UIElementProperties } from '../ui-element';
 import { UIProperty } from '../properties/ui-property.type';
+import {
+    UI_BUTTON_BACKGROUND_COLOR,
+    UI_BUTTON_BORDER_RADIUS,
+    UI_BUTTON_TEXT,
+    UI_BUTTON_TYPE,
+    UI_DEFAULT_COLOR,
+    UI_DEFAULT_FONT_SIZE,
+    UI_FONT_FAMILY,
+} from '../ui.constants';
 
+/**
+ * Properties of a {@link UIButton}.
+ *
+ * The hover, focus and active background colors fall back to `backgroundColor`. `color` is the
+ * color of the border and of the text.
+ */
 type UIButtonProperties = UIElementProperties & {
     backgroundColor?: UIProperty<string>;
     hoverBackgroundColor?: UIProperty<string>;
@@ -11,14 +26,20 @@ type UIButtonProperties = UIElementProperties & {
 };
 
 const defaultUIButtonProperties: UIButtonProperties = {
-    backgroundColor: new UIProperty('#d0d0d0'),
-    color: new UIProperty('black'),
-    text: new UIProperty('Button'),
+    backgroundColor: new UIProperty(UI_BUTTON_BACKGROUND_COLOR),
+    color: new UIProperty(UI_DEFAULT_COLOR),
+    text: new UIProperty(UI_BUTTON_TEXT),
 };
 
+/**
+ * Rounded button with a centered text, of type `button`.
+ *
+ * Its background color reflects its interaction state, the active (pressed) state taking
+ * precedence over the focused state, itself over the hovered state.
+ */
 export class UIButton extends UIElement<UIButtonProperties> {
     constructor(classNames: string[] = [], properties: UIButtonProperties = {}) {
-        super('button', classNames, { ...defaultUIButtonProperties, ...properties });
+        super(UI_BUTTON_TYPE, classNames, { ...defaultUIButtonProperties, ...properties });
     }
 
     protected override renderElement(ctx: CanvasRenderingContext2D): void {
@@ -33,16 +54,30 @@ export class UIButton extends UIElement<UIButtonProperties> {
         const text = this.v('text');
 
         ctx.fillStyle = backgroundColor;
-        this.drawRoundedRect(ctx, this.v('x'), this.v('y'), this.v('width'), this.v('height'), 8);
+        this.drawRoundedRect(
+            ctx,
+            this.v('x'),
+            this.v('y'),
+            this.v('width'),
+            this.v('height'),
+            UI_BUTTON_BORDER_RADIUS,
+        );
         ctx.fill();
 
         ctx.strokeStyle = color;
         ctx.lineWidth = 1;
-        this.drawRoundedRect(ctx, this.v('x'), this.v('y'), this.v('width'), this.v('height'), 8);
+        this.drawRoundedRect(
+            ctx,
+            this.v('x'),
+            this.v('y'),
+            this.v('width'),
+            this.v('height'),
+            UI_BUTTON_BORDER_RADIUS,
+        );
         ctx.stroke();
 
         ctx.fillStyle = color;
-        ctx.font = '14px Arial';
+        ctx.font = `${UI_DEFAULT_FONT_SIZE}px ${UI_FONT_FAMILY}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(text, this.v('x') + this.v('width') / 2, this.v('y') + this.v('height') / 2);

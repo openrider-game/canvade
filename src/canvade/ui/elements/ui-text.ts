@@ -1,6 +1,14 @@
 import { UIElement, UIElementProperties } from '../ui-element';
 import { UIProperty } from '../properties/ui-property.type';
+import {
+    UI_DEFAULT_COLOR,
+    UI_DEFAULT_FONT_SIZE,
+    UI_FONT_FAMILY,
+    UI_TEXT_TEXT,
+    UI_TEXT_TYPE,
+} from '../ui.constants';
 
+/** Properties of a {@link UIText}, `fontSize` being in pixels. */
 type UITextProperties = UIElementProperties & {
     color?: UIProperty<string>;
     text?: UIProperty<string>;
@@ -8,14 +16,19 @@ type UITextProperties = UIElementProperties & {
 };
 
 const defaultUITextProperties: UITextProperties = {
-    color: new UIProperty('black'),
-    text: new UIProperty('Text'),
-    fontSize: new UIProperty(14),
+    color: new UIProperty(UI_DEFAULT_COLOR),
+    text: new UIProperty(UI_TEXT_TEXT),
+    fontSize: new UIProperty(UI_DEFAULT_FONT_SIZE),
 };
 
+/**
+ * Single line of text drawn from the top left corner of its bounds, of type `text`.
+ *
+ * The text is neither wrapped nor clipped to the element bounds; an empty text draws nothing.
+ */
 export class UIText extends UIElement<UITextProperties> {
     constructor(classNames: string[] = [], properties: UITextProperties = {}) {
-        super('text', classNames, { ...defaultUITextProperties, ...properties });
+        super(UI_TEXT_TYPE, classNames, { ...defaultUITextProperties, ...properties });
     }
 
     protected override renderElement(ctx: CanvasRenderingContext2D): void {
@@ -28,7 +41,7 @@ export class UIText extends UIElement<UITextProperties> {
         }
 
         ctx.fillStyle = color;
-        ctx.font = `${fontSize}px Arial`;
+        ctx.font = `${fontSize}px ${UI_FONT_FAMILY}`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillText(text, this.v('x'), this.v('y'));

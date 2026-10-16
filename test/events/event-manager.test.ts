@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { Vector } from '../../src/canvade/core/math/vector';
 import { EventManager } from '../../src/canvade/event/event-manager';
+import { Mouse } from '../../src/canvade/event/mouse/mouse';
 import { World } from '../../src/canvade/world/world';
 import { createCanvasMock } from '../helpers/canvas';
 
@@ -36,6 +37,81 @@ describe('EventManager mouse input', () => {
         }
         expect(canvas.focus).toHaveBeenCalledOnce();
         expect(mouseEvent.preventDefault).toHaveBeenCalledOnce();
+    });
+});
+
+describe('EventManager mouse world positions', () => {
+    test('converts the mouse position to world units when the state has a world', () => {
+        const { context } = createCanvasMock(200, 100, {
+            left: 0,
+            top: 0,
+            width: 200,
+            height: 100,
+        });
+        const world = new (class extends World {})(new Vector(50, 25), 2);
+        const stateManager = {
+            getCurrent: () => ({ getWorld: () => world, dispatch: vi.fn() }),
+        };
+        const eventManager = new EventManager(context);
+        const mouseEvent = { clientX: 120, clientY: 60, preventDefault: vi.fn() };
+
+        eventManager.onMouseDown(mouseEvent as unknown as MouseEvent, stateManager as never);
+
+        expect(Mouse.mousePos).toEqual(new Vector(120, 60));
+        expect(Mouse.lastClick).toEqual(new Vector(120, 60));
+        expect(Mouse.worldPos).toEqual(new Vector(60, 30));
+        expect(Mouse.lastWorldClick).toEqual(new Vector(60, 30));
+    });
+
+    test.each([
+        ['onMouseEnter', 'mouseEnter', false],
+        ['onMouseOut', 'mouseOut', false],
+        ['onContextMenu', 'contextMenu', true],
+    ] as const)('%s dispatches %s with the mouse position', (method, eventName, prevented) => {
+        const { context } = createCanvasMock(200, 100, {
+            left: 0,
+            top: 0,
+            width: 200,
+            height: 100,
+        });
+        const dispatch = vi.fn();
+        const stateManager = { getCurrent: () => ({ getWorld: () => undefined, dispatch }) };
+        const mouseEvent = { clientX: 30, clientY: 40, preventDefault: vi.fn() };
+
+        new EventManager(context)[method](
+            mouseEvent as unknown as MouseEvent,
+            stateManager as never,
+        );
+
+        expect(dispatch).toHaveBeenCalledWith(
+            eventName,
+            expect.objectContaining({
+                detail: expect.objectContaining({ position: new Vector(30, 40) }),
+            }),
+        );
+        expect(mouseEvent.preventDefault).toHaveBeenCalledTimes(prevented ? 1 : 0);
+    });
+
+    test('forwards the visibility changes and the keyboard control events', () => {
+        const { context } = createCanvasMock();
+        const dispatch = vi.fn();
+        const stateManager = { getCurrent: () => ({ dispatch }) };
+        const eventManager = new EventManager(context);
+        const keyboardEvent = {} as KeyboardEvent;
+        const controlEvent = new CustomEvent('keyboarddown', {
+            detail: { keyboardEvent, key: 'jump' },
+        });
+
+        eventManager.onVisibilityChange(stateManager as never);
+        eventManager.onKeyboardDown(controlEvent, stateManager as never);
+        eventManager.onKeyboardUp(controlEvent, stateManager as never);
+
+        expect(dispatch.mock.calls.map(([name]) => name)).toEqual([
+            'visibilityChange',
+            'keyboardDown',
+            'keyboardUp',
+        ]);
+        expect(dispatch.mock.calls[1][1].detail).toMatchObject({ key: 'jump', keyboardEvent });
     });
 });
 

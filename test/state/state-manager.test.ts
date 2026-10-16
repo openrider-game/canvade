@@ -77,6 +77,26 @@ describe('StateManager', () => {
         expect(updateListener).toHaveBeenCalledOnce();
         expect(renderListener).toHaveBeenCalledOnce();
     });
+
+    test('attaches registered states so they can drive transitions and share data', () => {
+        const manager = new StateManager();
+        manager.addState(TestState, 'menu');
+        manager.addState(TestState, 'level');
+
+        const menu = manager.getState('menu')!;
+        expect(menu.manager).toBe(manager);
+
+        manager.push('menu');
+        menu.manager.shared.set('level', 3);
+        menu.manager.push('level');
+
+        expect(manager.getCurrent()).toBe(manager.getState('level'));
+        expect(manager.getState('level')!.manager.shared.get('level')).toBe(3);
+    });
+
+    test('throws when accessing the manager of a detached state', () => {
+        expect(() => new TestState().manager).toThrow('State is not attached to a state manager');
+    });
 });
 
 function createRenderContext(): CanvasRenderingContext2D {
