@@ -9,6 +9,7 @@ import {
     ParentDimensionRule,
     ParentPositionRule,
     UIHorizontalAlign,
+    UIPointerEvents,
     UIPosition,
     UIVerticalAlign,
 } from './properties/ui-property-resolution';
@@ -26,6 +27,7 @@ import { UIElementTree } from './tree/ui-element-tree';
 import {
     UI_DEFAULT_HORIZONTAL_ALIGN,
     UI_DEFAULT_OFFSET,
+    UI_DEFAULT_POINTER_EVENTS,
     UI_DEFAULT_POSITION,
     UI_DEFAULT_SIZE,
     UI_DEFAULT_VERTICAL_ALIGN,
@@ -39,8 +41,10 @@ export interface UIBounds {
     height: number;
 }
 
-/** Click callback of a UI element, receiving the click position in canvas pixels. */
+/** Click callback of a UI element, receiving the click position in UI pixels. */
 export type UIClickHandler = (x: number, y: number, target: UIElement) => void;
+/** Callback of the `change` and `submit` events of an input, receiving its value. */
+export type UIValueHandler = (value: string, target: UIElement) => void;
 
 /**
  * Layout properties shared by all the UI elements.
@@ -50,6 +54,8 @@ export type UIClickHandler = (x: number, y: number, target: UIElement) => void;
  * selected by `horizontalAlign` and `verticalAlign`: with `right` or `bottom` they move the
  * element away from the right or bottom edge, with `center` or `middle` away from the centered
  * position. `position: 'absolute'` takes the element out of the flow of its container.
+ * `pointerEvents: 'none'` lets the mouse go through the element to what is under it, e.g. for a
+ * container only laying out buttons.
  */
 export type UIElementProperties = UIPropertyMap & {
     x?: UIResolvableProperty<UIResolvableUnit>;
@@ -59,6 +65,7 @@ export type UIElementProperties = UIPropertyMap & {
     horizontalAlign?: UIProperty<UIHorizontalAlign>;
     verticalAlign?: UIProperty<UIVerticalAlign>;
     position?: UIProperty<UIPosition>;
+    pointerEvents?: UIProperty<UIPointerEvents>;
 };
 
 const defaultElementProperties: UIElementProperties = {
@@ -69,6 +76,7 @@ const defaultElementProperties: UIElementProperties = {
     horizontalAlign: new UIProperty<UIHorizontalAlign>(UI_DEFAULT_HORIZONTAL_ALIGN),
     verticalAlign: new UIProperty<UIVerticalAlign>(UI_DEFAULT_VERTICAL_ALIGN),
     position: new UIProperty<UIPosition>(UI_DEFAULT_POSITION),
+    pointerEvents: new UIProperty<UIPointerEvents>(UI_DEFAULT_POINTER_EVENTS),
 };
 
 /**
@@ -181,6 +189,19 @@ export abstract class UIElement<
             height: this.v('height'),
         };
     }
+
+    /** Whether the element can be the target of the mouse, see `pointerEvents`. */
+    public receivesPointer(): boolean {
+        return !this.isTreeRoot && this.v('pointerEvents') !== 'none';
+    }
+
+    /**
+     * Handles a key pressed while the element has the focus, implemented by the elements taking
+     * keyboard input.
+     *
+     * @returns Whether the key was handled, the key event then being consumed.
+     */
+    public handleKeyDown?(keyboardEvent: KeyboardEvent): boolean;
 
     /** Returns whether a canvas position is inside the element bounds, edges included. */
     public contains(px: number, py: number): boolean {

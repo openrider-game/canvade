@@ -1,3 +1,4 @@
+import { Display } from './core/display';
 import { DebugLevel, DebugUtils } from './debug.utils';
 import { EventManager } from './event/event-manager';
 import { State, StateClass } from './state/state';
@@ -19,6 +20,11 @@ export type GameOptions = {
     updatesPerSecond: number;
     /** Global level of the {@link DebugUtils} logs, {@link DebugLevel.NONE} by default. */
     debugLevel: DebugLevel;
+    /**
+     * Fixed scale of the UI, in canvas pixels per UI pixel; by default the UI follows the pixel
+     * ratio of the screen (see {@link Display}).
+     */
+    uiScale?: number;
 };
 
 const defaultOptions = {
@@ -84,6 +90,7 @@ export class Game {
         this.setCanvasSize();
 
         const mergedOptions = { ...defaultOptions, ...options };
+        Display.fixedUIScale = mergedOptions.uiScale ?? null;
 
         this.lastTime = performance.now();
         this.frameDuration = 1000 / mergedOptions.updatesPerSecond;
@@ -102,6 +109,7 @@ export class Game {
     /** Sizes the canvas in device pixels, so that it stays sharp on high density screens. */
     private setCanvasSize() {
         const devicePixelRatio = window.devicePixelRatio || 1;
+        Display.pixelRatio = devicePixelRatio;
 
         this.canvas.width = this.canvas.parentElement!.clientWidth * devicePixelRatio;
         this.canvas.height = this.canvas.parentElement!.clientHeight * devicePixelRatio;

@@ -29,8 +29,9 @@ export class UIElementTree {
     /**
      * Returns the deepest element of a subtree at a canvas position, or `null`.
      *
-     * Children are tested from the last one, drawn on top. A tree root is never returned, so
-     * that positions over the root only are not captured by the UI.
+     * Children are tested from the last one, drawn on top. Elements that do not receive the
+     * pointer (see `UIElement.receivesPointer`), including the tree roots, are never returned,
+     * so that positions over them only are not captured by the UI.
      */
     public static findElementAt(element: UIElement, x: number, y: number): UIElement | null {
         if (!element.contains(x, y)) {
@@ -44,7 +45,7 @@ export class UIElementTree {
             }
         }
 
-        return element.isTreeRoot ? null : element;
+        return element.receivesPointer() ? element : null;
     }
 
     /**
@@ -64,9 +65,10 @@ export class UIElementTree {
 
     /**
      * Calls `dispatchClick` on the deepest element of a subtree at a canvas position, the last
-     * children being tested first. Unlike hit tests, a tree root can receive the click.
+     * children being tested first. Unlike hit tests, a tree root can receive the click, but
+     * not an element with `pointerEvents: 'none'`.
      *
-     * @returns Whether the position is inside `element`.
+     * @returns Whether an element received the click.
      */
     public static handleClick(
         element: UIElement,
@@ -82,6 +84,10 @@ export class UIElementTree {
             if (this.handleClick(element.children[i], x, y, dispatchClick)) {
                 return true;
             }
+        }
+
+        if (!element.isTreeRoot && element.v('pointerEvents') === 'none') {
+            return false;
         }
 
         dispatchClick(element);

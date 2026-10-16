@@ -24,6 +24,11 @@ export type UIVerticalAlign = 'top' | 'middle' | 'bottom';
  * ones are laid out in the whole content box without affecting the others.
  */
 export type UIPosition = 'static' | 'absolute';
+/**
+ * Whether an element is the target of the mouse: with `none`, the mouse goes through the
+ * element (not through its children), like the CSS `pointer-events` property.
+ */
+export type UIPointerEvents = 'auto' | 'none';
 
 /** Context given to a {@link UIPropertyResolutionRule}. */
 export interface UIPropertyResolutionContext {

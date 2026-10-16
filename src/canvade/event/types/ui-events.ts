@@ -10,12 +10,19 @@ export type GameClickEvent = GameEvent & {
     target: UIElement;
 };
 
+/** Payload of the `change` and `submit` events of an input, with its current value. */
+export type GameValueEvent = GameEvent & {
+    value: string;
+    target: UIElement;
+};
+
 /**
  * Events of a {@link UIElement}.
  *
  * `renderTree` is dispatched once the element and its children are rendered. The hover and
  * focus events are dispatched when the state changes, and `click` when the mouse is pressed
- * and released over the element.
+ * and released over the element. Inputs dispatch `change` when their value is edited and
+ * `submit` when Enter is pressed.
  */
 export type UIEvents = {
     renderTree: CustomEvent<GameRenderEvent>;
@@ -24,4 +31,6 @@ export type UIEvents = {
     hoverIn: undefined;
     hoverOut: undefined;
     click: CustomEvent<GameClickEvent>;
+    change: CustomEvent<GameValueEvent>;
+    submit: CustomEvent<GameValueEvent>;
 };

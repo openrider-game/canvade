@@ -16,3 +16,6 @@ export const MOUSE_DOWN_EVENT = 'mousedown',
     KEYBOARD_DOWN_EVENT = 'keyboarddown',
     /** Custom DOM event dispatched on the document by `Keyboard` when a control is released. */
     KEYBOARD_UP_EVENT = 'keyboardup';
+
+/** `MouseEvent.button` of the main button, usually the left one. */
+export const MOUSE_MAIN_BUTTON = 0;

@@ -59,7 +59,8 @@ It provides:
 - states stacked by a state manager, each made of layers receiving the input from the top layer down
 - keyboard controls and mouse positions, in canvas pixels and in world units
 - a world with a camera and a zoom, and the conversions between world and canvas coordinates
-- a declarative canvas UI: elements described by a structure and styled by CSS-like selectors, with relative units, alignment, absolute positioning, interaction states and animations
+- a declarative canvas UI: elements described by a structure and styled by CSS-like selectors, with relative units, alignment, absolute positioning, interaction states and animations, scaled to keep its size on high density screens
+- built-in UI elements: containers, buttons, texts, images and text inputs
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -215,8 +216,16 @@ this.uiRenderer.setUI(
 - Positions and sizes are numbers (pixels), `'px'` or `'%'` values relative to the parent bounds.
 - Containers lay their children out in a column or a row (`flexDirection`), with `gap` and `padding`; absolute children are placed in the content box of the container instead.
 - `horizontalAlign` (`left`, `center`, `right`) and `verticalAlign` (`top`, `middle`, `bottom`) choose the edge the `x` and `y` offsets are measured from.
+- `pointerEvents: 'none'` lets the mouse go through an element (not through its children), e.g. a transparent container laying out buttons over the game.
 - Numeric properties can be animated: `element.animate('x', '20%', { duration: 400 })`.
 - Custom elements are registered with `UIElementFactory.registerElement('type', ElementClass)`.
+
+Besides `container`, `button` and `text`, the built-in elements are:
+
+- `image`: draws the image at the `src` URL, with a `fit` of `contain` (default), `cover` or `fill`, and an `opacity`. `UIImage.load(src)` preloads an image.
+- `input`: a single line text field, focused by a click, with a `value`, a `placeholder` and a `maxLength`. It receives the typed keys instead of the keyboard controls, and dispatches `change` on each edit and `submit` on Enter, which can be handled in the structure: `{ "input.name": { events: { change: (value) => ..., submit: (value) => ... } } }`. Escape or a click outside of the UI removes the focus.
+
+The UI is laid out in UI pixels: the canvas is sized in device pixels to stay sharp, and the UI is scaled by the pixel ratio of the screen (`Display.uiScale`), so that it keeps its size on high density screens. The bounds of the elements and the positions given to their click handlers are in UI pixels. Pass a `uiScale` to the game options to use a fixed scale instead.
 
 ### Debugging
 
@@ -228,9 +237,8 @@ Pass a `debugLevel` to the game options to enable the `DebugUtils` logs up to th
 
 ## Roadmap
 
-- Click-through option for the UI elements, so that containers do not catch the mouse
-- Device pixel ratio aware rendering, so that the UI keeps its size on high density screens
-- More built-in UI elements (images, inputs)
+- Text selection and clipboard support in the inputs
+- Multi-line texts, wrapped to the width of their element
 
 See the [open issues](https://github.com/tomiy/canvade/issues) for a full list of proposed features (and known issues).
 

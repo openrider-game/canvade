@@ -54,7 +54,7 @@ function inputEvent(name: string) {
         name,
         consumed: false,
         position: new Vector(),
-        mouseEvent: {} as MouseEvent,
+        mouseEvent: { button: 0 } as MouseEvent,
     });
 }
 
@@ -160,7 +160,7 @@ describe('Layer user interface', () => {
                 name,
                 consumed: false,
                 position: new Vector(x, y),
-                mouseEvent: {} as MouseEvent,
+                mouseEvent: { button: 0 } as MouseEvent,
             });
 
         const down = at('mouseDown', 20, 20);

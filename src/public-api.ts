@@ -13,6 +13,7 @@ export * from './canvade/debug.utils';
 export * from './canvade/game';
 
 export * from './canvade/core/cloneable.interface';
+export * from './canvade/core/display';
 export * from './canvade/core/serializable.interface';
 
 export * from './canvade/core/math/interpolation';

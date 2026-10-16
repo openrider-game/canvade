@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { DebugLevel, DebugUtils } from '../../src/canvade/debug.utils';
-import { Game } from '../../src/canvade/game';
+import { Display } from '../../src/canvade/core/display';
+import { Game, GameOptions } from '../../src/canvade/game';
 import { Layer } from '../../src/canvade/state/layer/layer';
 import { State } from '../../src/canvade/state/state';
 import { createCanvasMock } from '../helpers/canvas';
 
 afterEach(() => {
+    Display.pixelRatio = 1;
+    Display.fixedUIScale = null;
     DebugUtils.setDebugLevel(DebugLevel.NONE);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -24,6 +27,16 @@ describe('Game initialization', () => {
         expect(windowMock.addEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
         expect(host.addEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
         expect(game.frameDuration).toBeCloseTo(1000 / 30);
+        // The UI follows the pixel ratio by default
+        expect(Display.pixelRatio).toBe(2);
+        expect(Display.uiScale).toBe(2);
+    });
+
+    test('can fix the scale of the UI', () => {
+        createGame(2, [1000], { uiScale: 1.5 });
+
+        expect(Display.pixelRatio).toBe(2);
+        expect(Display.uiScale).toBe(1.5);
     });
 });
 
@@ -84,6 +97,7 @@ describe('DebugUtils', () => {
 function createGame(
     devicePixelRatio: number,
     times = [1000],
+    options: Partial<GameOptions> = {},
 ): {
     game: Game;
     canvas: HTMLCanvasElement;
@@ -115,7 +129,7 @@ function createGame(
     vi.stubGlobal('location', { href: '' });
 
     return {
-        game: new Game(host, { updatesPerSecond: 30 }),
+        game: new Game(host, { updatesPerSecond: 30, ...options }),
         canvas,
         context,
         host,

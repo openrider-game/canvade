@@ -114,7 +114,7 @@ describe('UI rendering and interaction', () => {
             detail: {
                 name: 'mouseDown',
                 consumed: false,
-                mouseEvent: { clientX: 50, clientY: 50 } as MouseEvent,
+                mouseEvent: { button: 0, clientX: 50, clientY: 50 } as MouseEvent,
                 position: new Vector(50, 50),
             },
         });
@@ -125,7 +125,7 @@ describe('UI rendering and interaction', () => {
             detail: {
                 name: 'mouseUp',
                 consumed: false,
-                mouseEvent: { clientX: 50, clientY: 50 } as MouseEvent,
+                mouseEvent: { button: 0, clientX: 50, clientY: 50 } as MouseEvent,
                 position: new Vector(50, 50),
             },
         });
@@ -178,7 +178,7 @@ describe('UI rendering and interaction', () => {
             detail: {
                 name: 'mouseMove',
                 consumed: false,
-                mouseEvent: { clientX: 20, clientY: 20 } as MouseEvent,
+                mouseEvent: { button: 0, clientX: 20, clientY: 20 } as MouseEvent,
                 position: new Vector(20, 20),
             },
         });
@@ -188,6 +188,44 @@ describe('UI rendering and interaction', () => {
         expect(root.children[0].isHovered()).toBe(true);
         expect(hoverIn).toHaveBeenCalledOnce();
         expect(mouseMove.detail.consumed).toBe(true);
+    });
+
+    test('presses and clicks the elements with the main mouse button only', () => {
+        const click = vi.fn();
+        const layer = new TestLayer();
+        const root = layer.uiRenderer.setUI([{ 'button.start': { events: { click } } }], {
+            '.start': { width: 80, height: 40 },
+        });
+        layer.uiRenderer.render(createCanvasMock().context);
+        const button = root.children[0];
+        const mouseEvent = (name: string, mouseButton: number, x = 10) =>
+            new CustomEvent<GameMouseEvent>(name, {
+                detail: {
+                    name,
+                    consumed: false,
+                    mouseEvent: { button: mouseButton, clientX: x, clientY: 20 } as MouseEvent,
+                    position: new Vector(x, 20),
+                },
+            });
+
+        // A right click over the button is kept from the layers below, without clicking it
+        const rightDown = mouseEvent('mouseDown', 2);
+        layer.uiRenderer.dispatch('mouseDown', rightDown);
+        expect(rightDown.detail.consumed).toBe(true);
+        expect(button.isActive()).toBe(false);
+        layer.uiRenderer.dispatch('mouseUp', mouseEvent('mouseUp', 2));
+        expect(click).not.toHaveBeenCalled();
+
+        // Releasing another button during a press neither clicks nor ends the press
+        layer.uiRenderer.dispatch('mouseDown', mouseEvent('mouseDown', 0));
+        const rightUp = mouseEvent('mouseUp', 2, 300);
+        layer.uiRenderer.dispatch('mouseUp', rightUp);
+        expect(click).not.toHaveBeenCalled();
+        expect(rightUp.detail.consumed).toBe(false);
+        expect(button.isActive()).toBe(true);
+
+        layer.uiRenderer.dispatch('mouseUp', mouseEvent('mouseUp', 0));
+        expect(click).toHaveBeenCalledOnce();
     });
 
     test('does not activate a sibling when release occurs over a different button', () => {
@@ -219,7 +257,7 @@ describe('UI rendering and interaction', () => {
             detail: {
                 name: 'mouseDown',
                 consumed: false,
-                mouseEvent: { clientX: 10, clientY: 20 } as MouseEvent,
+                mouseEvent: { button: 0, clientX: 10, clientY: 20 } as MouseEvent,
                 position: new Vector(10, 20),
             },
         });
@@ -229,7 +267,7 @@ describe('UI rendering and interaction', () => {
             detail: {
                 name: 'mouseUp',
                 consumed: false,
-                mouseEvent: { clientX: 100, clientY: 20 } as MouseEvent,
+                mouseEvent: { button: 0, clientX: 100, clientY: 20 } as MouseEvent,
                 position: new Vector(100, 20),
             },
         });
@@ -245,7 +283,7 @@ describe('UI rendering and interaction', () => {
             detail: {
                 name: 'mouseDown',
                 consumed: false,
-                mouseEvent: { clientX: 10, clientY: 20 } as MouseEvent,
+                mouseEvent: { button: 0, clientX: 10, clientY: 20 } as MouseEvent,
                 position: new Vector(10, 20),
             },
         });
@@ -253,7 +291,7 @@ describe('UI rendering and interaction', () => {
             detail: {
                 name: 'mouseUp',
                 consumed: false,
-                mouseEvent: { clientX: 10, clientY: 20 } as MouseEvent,
+                mouseEvent: { button: 0, clientX: 10, clientY: 20 } as MouseEvent,
                 position: new Vector(10, 20),
             },
         });
@@ -269,7 +307,7 @@ describe('UI rendering and interaction', () => {
             detail: {
                 name: 'mouseDown',
                 consumed: false,
-                mouseEvent: { clientX: 30, clientY: 20 } as MouseEvent,
+                mouseEvent: { button: 0, clientX: 30, clientY: 20 } as MouseEvent,
                 position: new Vector(30, 20),
             },
         });
@@ -277,7 +315,7 @@ describe('UI rendering and interaction', () => {
             detail: {
                 name: 'mouseUp',
                 consumed: false,
-                mouseEvent: { clientX: 30, clientY: 20 } as MouseEvent,
+                mouseEvent: { button: 0, clientX: 30, clientY: 20 } as MouseEvent,
                 position: new Vector(30, 20),
             },
         });
@@ -303,7 +341,7 @@ describe('UI rendering and interaction', () => {
                 detail: {
                     name: 'mouseDown',
                     consumed: false,
-                    mouseEvent: { clientX: 20, clientY: 20 } as MouseEvent,
+                    mouseEvent: { button: 0, clientX: 20, clientY: 20 } as MouseEvent,
                     position: new Vector(20, 20),
                 },
             });

@@ -6,6 +6,8 @@
 export const UI_CONTAINER_TYPE = 'container',
     UI_BUTTON_TYPE = 'button',
     UI_TEXT_TYPE = 'text',
+    UI_IMAGE_TYPE = 'image',
+    UI_INPUT_TYPE = 'input',
     /** Separates the element type from its class names, e.g. `button.primary`. */
     UI_CLASS_SEPARATOR = '.',
     UI_TRANSPARENT = 'transparent',
@@ -27,6 +29,15 @@ export const UI_CONTAINER_TYPE = 'container',
     UI_DEFAULT_HORIZONTAL_ALIGN = 'left',
     UI_DEFAULT_VERTICAL_ALIGN = 'top',
     UI_DEFAULT_POSITION = 'static',
+    UI_DEFAULT_POINTER_EVENTS = 'auto',
+    UI_DEFAULT_IMAGE_FIT = 'contain',
+    UI_INPUT_BACKGROUND_COLOR = '#fff',
+    UI_INPUT_PLACEHOLDER_COLOR = '#888',
+    UI_INPUT_FOCUS_COLOR = '#36f',
+    /** Space between the border of an input and its text, in pixels. */
+    UI_INPUT_PADDING = 6,
+    /** Duration of each phase of the caret blinking, in milliseconds. */
+    UI_INPUT_CARET_BLINK = 500,
     UI_DEFAULT_FLEX_DIRECTION = 'column',
     /** Size of the root of a UI tree, which covers the whole canvas. */
     UI_ROOT_SIZE = '100%';

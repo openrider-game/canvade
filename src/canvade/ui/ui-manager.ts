@@ -1,21 +1,33 @@
+import { Vector } from '../core/math/vector';
+import { Display } from '../core/display';
+import { MOUSE_MAIN_BUTTON } from '../event/event.constants';
 import { EventEmitter } from '../event/event-emitter';
-import { DOMEvents, GameMouseEvent } from '../event/types/dom-events';
+import { DOMEvents, GameKeyboardEvent, GameMouseEvent } from '../event/types/dom-events';
 import { GameLoopEvents, GameRenderEvent, GameUpdateEvent } from '../event/types/game-loop-events';
 import { StateEvents } from '../event/types/state-events';
 import { UIElement } from './ui-element';
 import { buildUIElementTree, UIStructureDefinition, UIStyleDefinition } from './ui-parser';
 
 /**
- * Renders a UI tree and routes the mouse to it. Each `Layer` owns one.
+ * Renders a UI tree and routes the mouse and the keyboard to it. Each `Layer` owns one.
  *
- * It renders the tree on `render`, advances its animations on `update`, and handles the mouse:
+ * It renders the tree on `render`, advances its animations on `update`, and handles the input:
  * - `mouseMove` updates the hovered element;
- * - `mouseDown` over an element focuses it and makes it active (pressed);
- * - `mouseUp` dispatches `click` when released over the active element, then clears it.
+ * - `mouseDown` over an element focuses it and makes it active (pressed), elsewhere it clears
+ *   the focus;
+ * - `mouseUp` dispatches `click` when released over the active element, then clears it;
+ * - `keyDown` is given to the focused element (see `UIElement.handleKeyDown`).
  *
- * Mouse events over an element (or ending a press) are marked as consumed, so the layers below
- * do not receive them. The focused and active elements are global: pressing an element of a
- * manager clears them in the manager that previously held them.
+ * Only the main mouse button presses and clicks the elements. Mouse events over an element
+ * (or ending a press) are marked as consumed, so the layers below do not receive them; the
+ * other buttons are consumed when pressed over an element, but never released by the UI, so
+ * that a drag started outside of it can end over it. Keys handled by the focused element are
+ * consumed too. The focused and active elements are global: pressing an element of a manager
+ * clears them in the manager that previously held them.
+ *
+ * The tree is laid out in UI pixels, scaled by {@link Display.uiScale} so that the UI keeps its
+ * size on high density screens: the bounds of the elements and the positions given to their
+ * click handlers are in UI pixels.
  */
 export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEvents> {
     /** Manager holding the focused and active elements, shared by all the managers. */
@@ -37,6 +49,7 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         this.subscribe('mouseDown', this.onMouseDown);
         this.subscribe('mouseMove', this.onMouseMove);
         this.subscribe('mouseUp', this.onMouseUp);
+        this.subscribe('keyDown', this.onKeyDown);
     }
 
     /** Replaces the UI tree, clearing the focused and active elements of the previous one. */
@@ -60,7 +73,7 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         return rootNode;
     }
 
-    /** Renders the UI tree over the whole canvas, if any. */
+    /** Renders the UI tree over the whole canvas, scaled to UI pixels, if any. */
     public render(ctx: CanvasRenderingContext2D): void {
         if (!this.rootNode) {
             return;
@@ -69,7 +82,20 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         if (this.clearBeforeRender) {
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         }
-        this.rootNode.render(ctx);
+
+        const scale = Display.uiScale;
+        ctx.save();
+        ctx.scale(scale, scale);
+        try {
+            this.rootNode.render(ctx, {
+                x: 0,
+                y: 0,
+                width: ctx.canvas.width / scale,
+                height: ctx.canvas.height / scale,
+            });
+        } finally {
+            ctx.restore();
+        }
     }
 
     private onRender(event: CustomEvent<GameRenderEvent>): void {
@@ -85,22 +111,28 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
             return;
         }
 
-        const { x, y } = event.detail.position;
+        const { x, y } = this.toUIPosition(event.detail.position);
         const target = this.rootNode.findElementAt(x, y);
+        const mainButton = event.detail.mouseEvent.button === MOUSE_MAIN_BUTTON;
         if (target) {
-            this.claimInteraction(target);
+            if (mainButton) {
+                this.claimInteraction(target);
+            }
             event.detail.consumed = true;
+        } else if (mainButton && UIManager.interactionOwner === this) {
+            // Clicking outside of the UI removes the focus, e.g. from an input
+            this.rootNode.setFocusedElement(null);
         }
     }
 
     private onMouseUp(event: CustomEvent<GameMouseEvent>): void {
-        if (!this.rootNode) {
+        if (!this.rootNode || event.detail.mouseEvent.button !== MOUSE_MAIN_BUTTON) {
             return;
         }
 
-        const { x, y } = event.detail.position;
+        const { x, y } = this.toUIPosition(event.detail.position);
         const target = this.rootNode.findElementAt(x, y);
-        const activeTarget = this.findActiveElement(this.rootNode);
+        const activeTarget = this.findElement(this.rootNode, (element) => element.isActive());
         if (!event.detail.consumed && activeTarget && activeTarget === target) {
             activeTarget.handleClick(x, y, event.detail.mouseEvent);
         }
@@ -117,7 +149,7 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
             return;
         }
 
-        const { x, y } = event.detail.position;
+        const { x, y } = this.toUIPosition(event.detail.position);
         const target = this.rootNode.findElementAt(x, y);
         this.rootNode.setHoveredElement(target);
         if (target) {
@@ -125,17 +157,34 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         }
     }
 
-    private findActiveElement(element: UIElement): UIElement | null {
-        if (element.isActive()) {
+    private onKeyDown(event: CustomEvent<GameKeyboardEvent>): void {
+        if (event.detail.consumed || !this.rootNode) {
+            return;
+        }
+
+        const focused = this.findElement(this.rootNode, (element) => element.isFocused());
+        if (focused?.handleKeyDown?.(event.detail.keyboardEvent)) {
+            event.detail.consumed = true;
+        }
+    }
+
+    /** Converts a position in canvas pixels to UI pixels. */
+    private toUIPosition(position: Vector): Vector {
+        return position.scale(1 / Display.uiScale);
+    }
+
+    private findElement(
+        element: UIElement,
+        predicate: (element: UIElement) => boolean,
+    ): UIElement | null {
+        if (predicate(element)) {
             return element;
         }
 
         for (const child of element.children) {
-            if (child instanceof UIElement) {
-                const activeElement = this.findActiveElement(child);
-                if (activeElement) {
-                    return activeElement;
-                }
+            const match = this.findElement(child, predicate);
+            if (match) {
+                return match;
             }
         }
 

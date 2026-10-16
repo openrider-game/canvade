@@ -1,5 +1,5 @@
 import { EventEmitter } from '../../event/event-emitter';
-import { DOMEvents, GameMouseEvent } from '../../event/types/dom-events';
+import { DOMEvents, GameKeyboardEvent, GameMouseEvent } from '../../event/types/dom-events';
 import {
     GameLoopEvents,
     GameRenderEvent,
@@ -12,10 +12,10 @@ import { UIManager } from '../../ui/ui-manager';
  * A layer of a `State`, receiving the events forwarded by its state.
  *
  * Subclasses subscribe to the events they need in {@link Layer.initLayer}. Each layer owns a
- * {@link UIManager}, which receives `update`, `render`, `mouseDown`, `mouseMove` and `mouseUp`
- * after the receivers subscribed in `initLayer`: the UI is drawn over the layer content, and a
- * receiver can set the `consumed` flag of a mouse event to hide it from the UI. When the UI
- * handles a mouse event, it consumes it, so the layers below do not receive it.
+ * {@link UIManager}, which receives `update`, `render`, `mouseDown`, `mouseMove`, `mouseUp` and
+ * `keyDown` after the receivers subscribed in `initLayer`: the UI is drawn over the layer
+ * content, and a receiver can set the `consumed` flag of an input event to hide it from the UI.
+ * When the UI handles an input event, it consumes it, so the layers below do not receive it.
  */
 export abstract class Layer extends EventEmitter<DOMEvents & StateEvents & GameLoopEvents> {
     /** UI of the layer, set with {@link UIManager.setUI}. */
@@ -30,6 +30,7 @@ export abstract class Layer extends EventEmitter<DOMEvents & StateEvents & GameL
         this.subscribe('mouseDown', this.mouseDownUI);
         this.subscribe('mouseMove', this.mouseMoveUI);
         this.subscribe('mouseUp', this.mouseUpUI);
+        this.subscribe('keyDown', this.keyDownUI);
     }
 
     /**
@@ -62,6 +63,12 @@ export abstract class Layer extends EventEmitter<DOMEvents & StateEvents & GameL
     private mouseMoveUI(event: CustomEvent<GameMouseEvent>): void {
         if (!event.detail.consumed) {
             this.uiRenderer.dispatch('mouseMove', event);
+        }
+    }
+
+    private keyDownUI(event: CustomEvent<GameKeyboardEvent>): void {
+        if (!event.detail.consumed) {
+            this.uiRenderer.dispatch('keyDown', event);
         }
     }
 }

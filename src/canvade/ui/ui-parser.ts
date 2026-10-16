@@ -1,4 +1,4 @@
-import { UIClickHandler, UIElement } from './ui-element';
+import { UIClickHandler, UIElement, UIValueHandler } from './ui-element';
 import { UIElementFactory } from './ui-element-factory';
 import { createUIProperty, UIPropertyInstance, UIUnit } from './properties/ui-property.type';
 import {
@@ -16,9 +16,14 @@ export interface UIStructureElementDefinition {
     data?: Record<string, unknown>;
 }
 
-/** Event handlers of an element, in a {@link UIStructureElementDefinition}. */
+/**
+ * Event handlers of an element, in a {@link UIStructureElementDefinition}. `change` and
+ * `submit` are dispatched by the inputs.
+ */
 export interface UIStructureEvents {
     click?: UIClickHandler;
+    change?: UIValueHandler;
+    submit?: UIValueHandler;
 }
 
 /**
@@ -195,12 +200,20 @@ function buildElement(
     const element = createElement(descriptor, properties);
     element.isTreeRoot = isTreeRoot;
     Object.assign(element.data, descriptor.data);
-    const clickHandler = descriptor.events?.click;
-    if (clickHandler !== undefined) {
-        if (typeof clickHandler !== 'function') {
-            throw new Error(`Invalid click handler for UI element "${descriptor.type}"`);
+    const { click, change, submit } = descriptor.events ?? {};
+    if (click !== undefined) {
+        element.onClick(checkHandler(click, 'click', descriptor));
+    }
+    for (const [name, handler] of [
+        ['change', change],
+        ['submit', submit],
+    ] as const) {
+        if (handler !== undefined) {
+            const valueHandler = checkHandler(handler, name, descriptor);
+            element.subscribe(name, (event) =>
+                valueHandler(event.detail.value, event.detail.target),
+            );
         }
-        element.onClick(clickHandler);
     }
     const currentPath = isTreeRoot ? [] : [...ancestors, descriptor];
 
@@ -209,6 +222,18 @@ function buildElement(
     }
 
     return element;
+}
+
+/**
+ * Returns the handler of an event of a structure definition.
+ *
+ * @throws When the handler is not a function.
+ */
+function checkHandler<T>(handler: T, name: string, descriptor: ElementDescriptor): T {
+    if (typeof handler !== 'function') {
+        throw new Error(`Invalid ${name} handler for UI element "${descriptor.type}"`);
+    }
+    return handler;
 }
 
 /**

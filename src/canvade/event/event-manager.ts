@@ -190,6 +190,8 @@ export class EventManager {
     /**
      * Dispatches the raw `keyDown` event, then lets {@link Keyboard} update its controls, which
      * may synchronously trigger `keyboardDown`. Ignored when the canvas does not have the focus.
+     *
+     * A key consumed by the state, e.g. typed in a UI input, does not trigger the controls.
      */
     public onKeyDown(e: KeyboardEvent, stateManager: StateManager): void {
         if (document.activeElement === this.ctx.canvas) {
@@ -201,7 +203,9 @@ export class EventManager {
                 keyboardEvent: e,
             });
             stateManager.getCurrent()?.dispatch('keyDown', gameKeyboardEvent);
-            Keyboard.onKeyDown(e);
+            if (!gameKeyboardEvent.detail.consumed) {
+                Keyboard.onKeyDown(e);
+            }
         }
     }
 
