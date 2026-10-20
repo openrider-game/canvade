@@ -216,3 +216,34 @@ describe('UI animations', () => {
         ).toBe(60);
     });
 });
+
+function updateEvent(delta: number): CustomEvent<GameUpdateEvent> {
+    return new CustomEvent<GameUpdateEvent>('update', {
+        detail: { name: 'update', consumed: false, progress: 0, delta },
+    });
+}
+
+describe('UI animations of aligned elements', () => {
+    test('keep the aligned edge in place while the size is animated', () => {
+        const layer = new TestLayer();
+        const root = layer.uiRenderer.setUI(['container.panel'], {
+            '.panel': { verticalAlign: 'bottom', y: 10, width: 50, height: 100 },
+        });
+        const ctx = createCanvasMock().context;
+        layer.uiRenderer.render(ctx);
+        const panel = root.children[0];
+        const bottom = () => panel.v('y') + panel.v('height');
+        expect(bottom()).toBe(90);
+
+        panel.animate('height', 20, { duration: 100, easing: (progress) => progress });
+        layer.uiRenderer.dispatch('update', updateEvent(50));
+        layer.uiRenderer.render(ctx);
+        expect(panel.v('height')).toBe(60);
+        expect(bottom()).toBe(90);
+
+        layer.uiRenderer.dispatch('update', updateEvent(50));
+        layer.uiRenderer.render(ctx);
+        expect(panel.v('height')).toBe(20);
+        expect(bottom()).toBe(90);
+    });
+});

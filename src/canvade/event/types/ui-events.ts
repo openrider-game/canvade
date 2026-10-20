@@ -16,13 +16,19 @@ export type GameValueEvent = GameEvent & {
     target: UIElement;
 };
 
+/** Payload of the `scroll` event of a container, with its new scroll position in pixels. */
+export type GameScrollEvent = GameEvent & {
+    scrollTop: number;
+    target: UIElement;
+};
+
 /**
  * Events of a {@link UIElement}.
  *
  * `renderTree` is dispatched once the element and its children are rendered. The hover and
  * focus events are dispatched when the state changes, and `click` when the mouse is pressed
  * and released over the element. Inputs dispatch `change` when their value is edited and
- * `submit` when Enter is pressed.
+ * `submit` when Enter is pressed. Scrolling containers dispatch `scroll` when they scroll.
  */
 export type UIEvents = {
     renderTree: CustomEvent<GameRenderEvent>;
@@ -33,4 +39,5 @@ export type UIEvents = {
     click: CustomEvent<GameClickEvent>;
     change: CustomEvent<GameValueEvent>;
     submit: CustomEvent<GameValueEvent>;
+    scroll: CustomEvent<GameScrollEvent>;
 };

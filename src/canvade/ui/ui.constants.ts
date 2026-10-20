@@ -15,6 +15,8 @@ export const UI_CONTAINER_TYPE = 'container',
     UI_BUTTON_BACKGROUND_COLOR = '#d0d0d0',
     /** Corner radius of the buttons, in pixels. */
     UI_BUTTON_BORDER_RADIUS = 8,
+    /** Border width of the buttons, containers and inputs, in pixels. */
+    UI_DEFAULT_BORDER_WIDTH = 1,
     UI_FONT_FAMILY = 'Arial',
     /** Font size of the buttons and texts, in pixels. */
     UI_DEFAULT_FONT_SIZE = 14,
@@ -39,5 +41,14 @@ export const UI_CONTAINER_TYPE = 'container',
     /** Duration of each phase of the caret blinking, in milliseconds. */
     UI_INPUT_CARET_BLINK = 500,
     UI_DEFAULT_FLEX_DIRECTION = 'column',
+    UI_DEFAULT_OVERFLOW = 'hidden',
+    /** Width of the container scrollbars, in pixels. */
+    UI_SCROLLBAR_WIDTH = 8,
+    UI_SCROLLBAR_COLOR = '#888',
+    UI_SCROLLBAR_TRACK_COLOR = '#eee',
+    /** Smallest height of a scrollbar thumb, in pixels, so that it can always be grabbed. */
+    UI_SCROLLBAR_MIN_THUMB = 16,
+    /** Background of the selected text of an input. */
+    UI_INPUT_SELECTION_COLOR = '#b4d5fe',
     /** Size of the root of a UI tree, which covers the whole canvas. */
     UI_ROOT_SIZE = '100%';

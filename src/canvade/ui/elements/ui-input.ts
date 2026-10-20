@@ -2,7 +2,10 @@ import { EventFactory } from '../../event/event-factory';
 import { GameValueEvent } from '../../event/types/ui-events';
 import { UIProperty } from '../properties/ui-property.type';
 import { UIElement, UIElementProperties } from '../ui-element';
+import { TextLayout } from './text-layout';
+import { TextSelection } from './text-selection';
 import {
+    UI_DEFAULT_BORDER_WIDTH,
     UI_DEFAULT_COLOR,
     UI_DEFAULT_FONT_SIZE,
     UI_FONT_FAMILY,
@@ -11,6 +14,7 @@ import {
     UI_INPUT_FOCUS_COLOR,
     UI_INPUT_PADDING,
     UI_INPUT_PLACEHOLDER_COLOR,
+    UI_INPUT_SELECTION_COLOR,
     UI_INPUT_TYPE,
 } from '../ui.constants';
 
@@ -18,7 +22,8 @@ import {
  * Properties of a {@link UIInput}.
  *
  * `color` is the color of the text and of the border, `focusColor` the color of the border
- * while focused. `maxLength` limits the number of characters, 0 for no limit.
+ * while focused, the border being then 1 pixel wider than `borderWidth`. `selectionColor` is the
+ * background of the selected text. `maxLength` limits the number of characters, 0 for no limit.
  */
 type UIInputProperties = UIElementProperties & {
     value?: UIProperty<string>;
@@ -27,6 +32,8 @@ type UIInputProperties = UIElementProperties & {
     placeholderColor?: UIProperty<string>;
     backgroundColor?: UIProperty<string>;
     focusColor?: UIProperty<string>;
+    selectionColor?: UIProperty<string>;
+    borderWidth?: UIProperty<number>;
     fontSize?: UIProperty<number>;
     maxLength?: UIProperty<number>;
 };
@@ -38,6 +45,8 @@ const defaultUIInputProperties: UIInputProperties = {
     placeholderColor: new UIProperty(UI_INPUT_PLACEHOLDER_COLOR),
     backgroundColor: new UIProperty(UI_INPUT_BACKGROUND_COLOR),
     focusColor: new UIProperty(UI_INPUT_FOCUS_COLOR),
+    selectionColor: new UIProperty(UI_INPUT_SELECTION_COLOR),
+    borderWidth: new UIProperty(UI_DEFAULT_BORDER_WIDTH),
     fontSize: new UIProperty(UI_DEFAULT_FONT_SIZE),
     maxLength: new UIProperty(0),
 };
@@ -45,30 +54,29 @@ const defaultUIInputProperties: UIInputProperties = {
 /**
  * Single line text field drawn on the canvas, of type `input`.
  *
- * Clicking it focuses it and moves the caret under the mouse; it then receives the keys typed
- * while the canvas has the focus: the printable characters, Backspace, Delete, the left and
- * right arrows, Home and End. Enter dispatches `submit`, Escape removes the focus, and each edit
- * dispatches `change`. The keys it handles do not trigger the `Keyboard` controls. Keys pressed
- * with Ctrl, Alt or Meta are left to the controls; there is no selection nor clipboard support.
+ * Pressing it focuses it and moves the caret under the mouse; dragging selects text, as does
+ * pressing it with Shift. It then receives the keys typed while the canvas has the focus: the
+ * printable characters, Backspace, Delete, the left and right arrows, Home and End, which select
+ * text with Shift, and Ctrl+A (or Cmd+A) selecting everything. Enter dispatches `submit`, Escape
+ * removes the focus, and each edit dispatches `change`. The keys it handles do not trigger the
+ * `Keyboard` controls; the other keys pressed with Ctrl, Alt or Meta are left to them.
+ *
+ * Copying, cutting and pasting go through the clipboard events of the browser, fired by its usual
+ * shortcuts: pasted text is inserted on one line, within `maxLength`.
  *
  * The value is the `value` property, which can be set from the styles or with
  * {@link UIInput.setValue}.
  */
 export class UIInput extends UIElement<UIInputProperties> {
-    /** Position of the caret, in characters from the start of the value. */
-    public caret = 0;
+    private readonly selection = new TextSelection();
+    private readonly layout = new TextLayout();
     /** Time since the caret last moved, in milliseconds, for the blinking. */
     private blinkTime = 0;
-    /** Horizontal scroll of the text, in pixels, so that the caret stays visible. */
-    private scroll = 0;
-    /** Positions of the caret after each character, in pixels, measured on the last render. */
-    private characterOffsets: number[] = [0];
 
     constructor(classNames: string[] = [], properties: UIInputProperties = {}) {
         super(UI_INPUT_TYPE, classNames, { ...defaultUIInputProperties, ...properties });
 
         this.subscribe('focusIn', () => (this.blinkTime = 0));
-        this.subscribe('click', (event) => this.placeCaret(event.detail.position.x));
     }
 
     /** Current value of the input. */
@@ -76,41 +84,78 @@ export class UIInput extends UIElement<UIInputProperties> {
         return this.v('value');
     }
 
+    /** Position of the caret, in characters from the start of the value. */
+    public get caret(): number {
+        return this.selection.caret;
+    }
+
+    /** Start of the selection, in characters. */
+    public get selectionStart(): number {
+        return this.selection.start;
+    }
+
+    /** End of the selection, in characters, equal to its start when no text is selected. */
+    public get selectionEnd(): number {
+        return this.selection.end;
+    }
+
+    public get selectedText(): string {
+        return this.selection.selectedText(this.value);
+    }
+
     /** Replaces the value, moving the caret to its end, without dispatching `change`. */
     public setValue(value: string): void {
         this.p('value').setValue(value);
-        this.caret = value.length;
+        this.selection.moveCaret(value.length, value.length);
+    }
+
+    /**
+     * Selects a range of characters, the caret ending at `end`.
+     *
+     * @param start - Clamped to the value, like `end`.
+     */
+    public select(start: number, end: number): void {
+        this.selection.select(start, end, this.value.length);
+        this.blinkTime = 0;
     }
 
     public override handleKeyDown(keyboardEvent: KeyboardEvent): boolean {
-        if (keyboardEvent.ctrlKey || keyboardEvent.altKey || keyboardEvent.metaKey) {
+        const key = keyboardEvent.key;
+        if (keyboardEvent.ctrlKey || keyboardEvent.metaKey) {
+            if (key.toLowerCase() === 'a') {
+                this.select(0, this.value.length);
+                return true;
+            }
+            // The clipboard shortcuts are handled by the clipboard events that follow them
+            return ['c', 'x', 'v'].includes(key.toLowerCase());
+        }
+        if (keyboardEvent.altKey) {
             return false;
         }
 
-        const value = this.value;
-        const caret = Math.min(this.caret, value.length);
-        switch (keyboardEvent.key) {
+        const extend = keyboardEvent.shiftKey;
+        const { caret, start, end, collapsed } = this.selection;
+        switch (key) {
             case 'Backspace':
-                if (caret > 0) {
-                    this.edit(value.slice(0, caret - 1) + value.slice(caret), caret - 1);
-                }
-                break;
             case 'Delete':
-                if (caret < value.length) {
-                    this.edit(value.slice(0, caret) + value.slice(caret + 1), caret);
+                // Without selection, the character before or after the caret
+                if (collapsed) {
+                    this.select(caret, caret + (key === 'Delete' ? 1 : -1));
                 }
+                this.replaceSelection('');
                 break;
             case 'ArrowLeft':
-                this.moveCaret(caret - 1);
+                // Without Shift, a selection collapses to its start
+                this.moveCaret(!collapsed && !extend ? start : caret - 1, extend);
                 break;
             case 'ArrowRight':
-                this.moveCaret(caret + 1);
+                this.moveCaret(!collapsed && !extend ? end : caret + 1, extend);
                 break;
             case 'Home':
-                this.moveCaret(0);
+                this.moveCaret(0, extend);
                 break;
             case 'End':
-                this.moveCaret(value.length);
+                this.moveCaret(this.value.length, extend);
                 break;
             case 'Enter':
                 this.dispatchValueEvent('submit');
@@ -118,20 +163,54 @@ export class UIInput extends UIElement<UIInputProperties> {
             case 'Escape':
                 this.updateInteractionState('focused', false);
                 break;
-            default: {
+            default:
                 // Printable characters have a one character name, other keys are not handled
-                if ([...keyboardEvent.key].length !== 1) {
+                if ([...key].length !== 1) {
                     return false;
                 }
-                const maxLength = this.v('maxLength');
-                if (maxLength <= 0 || value.length < maxLength) {
-                    const newValue = value.slice(0, caret) + keyboardEvent.key + value.slice(caret);
-                    this.edit(newValue, caret + keyboardEvent.key.length);
-                }
-            }
+                this.replaceSelection(key);
         }
 
         return true;
+    }
+
+    /**
+     * Copies the selected text, cuts it, or pastes the text of the clipboard over it.
+     *
+     * @returns Whether the event was handled: copying or cutting needs a selection.
+     */
+    public override handleClipboard(clipboardEvent: ClipboardEvent): boolean {
+        const data = clipboardEvent.clipboardData;
+        if (!data) {
+            return false;
+        }
+
+        if (clipboardEvent.type === 'paste') {
+            // A single line input: line breaks become spaces
+            this.replaceSelection(data.getData('text/plain').replace(/\r?\n|\r/g, ' '));
+            return true;
+        }
+
+        const selected = this.selectedText;
+        if (!selected) {
+            return false;
+        }
+
+        data.setData('text/plain', selected);
+        if (clipboardEvent.type === 'cut') {
+            this.replaceSelection('');
+        }
+        return true;
+    }
+
+    /** Moves the caret under the mouse, extending the selection when Shift is held. */
+    public override handlePointerDown(x: number, _y: number, mouseEvent: MouseEvent): void {
+        this.moveCaret(this.indexAt(x), mouseEvent.shiftKey);
+    }
+
+    /** Selects the text from where the mouse was pressed to where it is. */
+    public override handlePointerDrag(x: number): void {
+        this.moveCaret(this.indexAt(x), true);
     }
 
     public override updateAnimations(delta: number): void {
@@ -144,78 +223,76 @@ export class UIInput extends UIElement<UIInputProperties> {
         const value = this.value;
         const focused = this.isFocused();
         const text = value || this.v('placeholder');
+        const fontSize = this.v('fontSize');
+        const layout = this.layout;
 
         ctx.save();
         ctx.fillStyle = this.v('backgroundColor');
         ctx.fillRect(x, y, width, height);
         ctx.strokeStyle = focused ? this.v('focusColor') : this.v('color');
-        ctx.lineWidth = focused ? 2 : 1;
+        ctx.lineWidth = this.v('borderWidth') + (focused ? 1 : 0);
         ctx.strokeRect(x, y, width, height);
 
-        ctx.font = `${this.v('fontSize')}px ${UI_FONT_FAMILY}`;
+        ctx.font = `${fontSize}px ${UI_FONT_FAMILY}`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        this.measure(ctx, value);
-        const caretOffset = this.characterOffsets[Math.min(this.caret, value.length)];
-        this.updateScroll(caretOffset, width - 2 * UI_INPUT_PADDING);
+        layout.measure(ctx, value);
+        const caretOffset = layout.offsetOf(this.caret);
+        layout.scrollTo(caretOffset, width - 2 * UI_INPUT_PADDING);
 
         // The text scrolls inside the padding box
         ctx.beginPath();
         ctx.rect(x + UI_INPUT_PADDING, y, Math.max(0, width - 2 * UI_INPUT_PADDING), height);
         ctx.clip();
-        const textX = x + UI_INPUT_PADDING - this.scroll;
+        const textX = x + UI_INPUT_PADDING - layout.scroll;
+        const lineY = y + (height - fontSize) / 2;
+
+        if (focused && !this.selection.collapsed) {
+            const start = layout.offsetOf(this.selectionStart);
+            ctx.fillStyle = this.v('selectionColor');
+            ctx.fillRect(
+                textX + start,
+                lineY,
+                layout.offsetOf(this.selectionEnd) - start,
+                fontSize,
+            );
+        }
+
         if (text) {
             ctx.fillStyle = value ? this.v('color') : this.v('placeholderColor');
             ctx.fillText(text, textX, y + height / 2);
         }
 
         if (focused && Math.floor(this.blinkTime / UI_INPUT_CARET_BLINK) % 2 === 0) {
-            const caretHeight = this.v('fontSize');
             ctx.fillStyle = this.v('color');
-            ctx.fillRect(textX + caretOffset, y + (height - caretHeight) / 2, 1, caretHeight);
+            ctx.fillRect(textX + caretOffset, lineY, 1, fontSize);
         }
         ctx.restore();
     }
 
-    private edit(value: string, caret: number): void {
-        this.p('value').setValue(value);
-        this.moveCaret(caret);
-        this.dispatchValueEvent('change');
+    /**
+     * Replaces the selected text, or inserts at the caret, within `maxLength`, then dispatches
+     * `change` if the value changed.
+     */
+    private replaceSelection(text: string): void {
+        const value = this.value;
+        const newValue = this.selection.replace(value, text, this.v('maxLength'));
+        this.p('value').setValue(newValue);
+        this.blinkTime = 0;
+        if (newValue !== value) {
+            this.dispatchValueEvent('change');
+        }
     }
 
-    private moveCaret(caret: number): void {
-        this.caret = Math.max(0, Math.min(caret, this.value.length));
+    /** Moves the caret, extending the selection or collapsing it, and restarts the blinking. */
+    private moveCaret(caret: number, extend = false): void {
+        this.selection.moveCaret(caret, this.value.length, extend);
         this.blinkTime = 0;
     }
 
-    /** Moves the caret to the character boundary closest to a position, in UI pixels. */
-    private placeCaret(x: number): void {
-        const offset = x - (this.v('x') + UI_INPUT_PADDING - this.scroll);
-        let caret = 0;
-        this.characterOffsets.forEach((characterOffset, index) => {
-            if (
-                Math.abs(characterOffset - offset) < Math.abs(this.characterOffsets[caret] - offset)
-            ) {
-                caret = index;
-            }
-        });
-        this.moveCaret(caret);
-    }
-
-    private measure(ctx: CanvasRenderingContext2D, value: string): void {
-        this.characterOffsets = [0];
-        for (let index = 1; index <= value.length; index++) {
-            this.characterOffsets.push(ctx.measureText(value.slice(0, index)).width);
-        }
-    }
-
-    /** Scrolls the text so that the caret stays inside the visible width. */
-    private updateScroll(caretOffset: number, visibleWidth: number): void {
-        if (caretOffset - this.scroll > visibleWidth) {
-            this.scroll = caretOffset - visibleWidth;
-        } else if (caretOffset < this.scroll) {
-            this.scroll = caretOffset;
-        }
+    /** Character boundary closest to a position, in UI pixels. */
+    private indexAt(x: number): number {
+        return this.layout.indexAt(x - (this.v('x') + UI_INPUT_PADDING));
     }
 
     private dispatchValueEvent(name: 'change' | 'submit'): void {

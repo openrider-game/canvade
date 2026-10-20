@@ -2,7 +2,13 @@ import { Vector } from '../core/math/vector';
 import { Display } from '../core/display';
 import { MOUSE_MAIN_BUTTON } from '../event/event.constants';
 import { EventEmitter } from '../event/event-emitter';
-import { DOMEvents, GameKeyboardEvent, GameMouseEvent } from '../event/types/dom-events';
+import {
+    DOMEvents,
+    GameClipboardEvent,
+    GameKeyboardEvent,
+    GameMouseEvent,
+    GameWheelEvent,
+} from '../event/types/dom-events';
 import { GameLoopEvents, GameRenderEvent, GameUpdateEvent } from '../event/types/game-loop-events';
 import { StateEvents } from '../event/types/state-events';
 import { UIElement } from './ui-element';
@@ -16,14 +22,19 @@ import { buildUIElementTree, UIStructureDefinition, UIStyleDefinition } from './
  * - `mouseDown` over an element focuses it and makes it active (pressed), elsewhere it clears
  *   the focus;
  * - `mouseUp` dispatches `click` when released over the active element, then clears it;
- * - `keyDown` is given to the focused element (see `UIElement.handleKeyDown`).
+ * - `mouseMove` while an element is pressed lets it follow the mouse (see
+ *   `UIElement.handlePointerDrag`);
+ * - `scroll` (the mouse wheel) scrolls the elements under the mouse (see `UIElement.handleWheel`);
+ * - `keyDown`, `copy`, `cut` and `paste` are given to the focused element (see
+ *   `UIElement.handleKeyDown` and `UIElement.handleClipboard`).
  *
  * Only the main mouse button presses and clicks the elements. Mouse events over an element
  * (or ending a press) are marked as consumed, so the layers below do not receive them; the
  * other buttons are consumed when pressed over an element, but never released by the UI, so
- * that a drag started outside of it can end over it. Keys handled by the focused element are
- * consumed too. The focused and active elements are global: pressing an element of a manager
- * clears them in the manager that previously held them.
+ * that a drag started outside of it can end over it. The mouse wheel over an element is consumed
+ * too, so that it does not reach the layers below, as are the keys and clipboard events handled
+ * by the focused element. The focused and active elements are global: pressing an element of a
+ * manager clears them in the manager that previously held them.
  *
  * The tree is laid out in UI pixels, scaled by {@link Display.uiScale} so that the UI keeps its
  * size on high density screens: the bounds of the elements and the positions given to their
@@ -32,6 +43,10 @@ import { buildUIElementTree, UIStructureDefinition, UIStyleDefinition } from './
 export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEvents> {
     /** Manager holding the focused and active elements, shared by all the managers. */
     private static interactionOwner: UIManager | null = null;
+    /** Last mouse position over the canvas, in UI pixels, `null` once the mouse left it. */
+    private pointer: Vector | null = null;
+    /** Whether the hovered element must be found again once the new tree is laid out. */
+    private hoverPending = false;
 
     /**
      * Creates a manager, optionally with an initial UI tree.
@@ -49,15 +64,26 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         this.subscribe('mouseDown', this.onMouseDown);
         this.subscribe('mouseMove', this.onMouseMove);
         this.subscribe('mouseUp', this.onMouseUp);
+        this.subscribe('mouseOut', this.onMouseOut);
         this.subscribe('keyDown', this.onKeyDown);
+        this.subscribe('scroll', this.onScroll);
+        this.subscribe('copy', this.onClipboard);
+        this.subscribe('cut', this.onClipboard);
+        this.subscribe('paste', this.onClipboard);
     }
 
-    /** Replaces the UI tree, clearing the focused and active elements of the previous one. */
+    /**
+     * Replaces the UI tree, clearing the focused and active elements of the previous one.
+     *
+     * The element under the mouse is hovered as soon as the new tree is rendered, without
+     * waiting for the mouse to move.
+     */
     public setRootElement(rootNode: UIElement): void {
         if (UIManager.interactionOwner === this) {
             this.clearInteractionState();
         }
         this.rootNode = rootNode;
+        this.hoverPending = true;
     }
 
     /**
@@ -96,6 +122,15 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         } finally {
             ctx.restore();
         }
+
+        // Elements can only be hit once laid out
+        if (this.hoverPending) {
+            this.hoverPending = false;
+            const pointer = this.pointer;
+            this.rootNode.setHoveredElement(
+                pointer ? this.rootNode.findElementAt(pointer.x, pointer.y) : null,
+            );
+        }
     }
 
     private onRender(event: CustomEvent<GameRenderEvent>): void {
@@ -117,6 +152,7 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         if (target) {
             if (mainButton) {
                 this.claimInteraction(target);
+                target.handlePointerDown?.(x, y, event.detail.mouseEvent);
             }
             event.detail.consumed = true;
         } else if (mainButton && UIManager.interactionOwner === this) {
@@ -150,9 +186,53 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         }
 
         const { x, y } = this.toUIPosition(event.detail.position);
+        this.pointer = new Vector(x, y);
         const target = this.rootNode.findElementAt(x, y);
         this.rootNode.setHoveredElement(target);
-        if (target) {
+
+        const activeTarget = this.findElement(this.rootNode, (element) => element.isActive());
+        activeTarget?.handlePointerDrag?.(x, y);
+        if (target || activeTarget) {
+            event.detail.consumed = true;
+        }
+    }
+
+    /** Clears the hovered element when the mouse leaves the canvas. */
+    private onMouseOut(): void {
+        this.pointer = null;
+        this.rootNode?.setHoveredElement(null);
+    }
+
+    /** Scrolls the deepest scrolling element under the mouse, consuming the wheel over the UI. */
+    private onScroll(event: CustomEvent<GameWheelEvent>): void {
+        if (event.detail.consumed || !this.rootNode) {
+            return;
+        }
+
+        const { x, y } = this.toUIPosition(event.detail.position);
+        const target = this.rootNode.findElementAt(x, y);
+        if (!target) {
+            return;
+        }
+
+        const wheelEvent = event.detail.wheelEvent;
+        // Lines and pages, depending on the device, are converted to pixels
+        const unit = wheelEvent.deltaMode === 1 ? 16 : wheelEvent.deltaMode === 2 ? 400 : 1;
+        for (let element: UIElement | null = target; element; element = element.parent) {
+            if (element.handleWheel?.(wheelEvent.deltaY * unit)) {
+                break;
+            }
+        }
+        event.detail.consumed = true;
+    }
+
+    private onClipboard(event: CustomEvent<GameClipboardEvent>): void {
+        if (event.detail.consumed || !this.rootNode) {
+            return;
+        }
+
+        const focused = this.findElement(this.rootNode, (element) => element.isFocused());
+        if (focused?.handleClipboard?.(event.detail.clipboardEvent)) {
             event.detail.consumed = true;
         }
     }

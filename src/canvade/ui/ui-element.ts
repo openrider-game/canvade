@@ -45,6 +45,8 @@ export interface UIBounds {
 export type UIClickHandler = (x: number, y: number, target: UIElement) => void;
 /** Callback of the `change` and `submit` events of an input, receiving its value. */
 export type UIValueHandler = (value: string, target: UIElement) => void;
+/** Callback of the `scroll` event of a container, receiving its scroll position in pixels. */
+export type UIScrollHandler = (scrollTop: number, target: UIElement) => void;
 
 /**
  * Layout properties shared by all the UI elements.
@@ -172,11 +174,15 @@ export abstract class UIElement<
 
     /**
      * Resolves the `px` and `%` properties against the parent bounds, then applies the values
-     * of the running animations over them.
+     * of the running animations over them. The properties depending on an animated property use
+     * its animated value, so that an element aligned right or bottom keeps its edge in place while
+     * its size is animated.
      */
     public resolveLayout(parentBounds: UIBounds): void {
         this.layoutParentBounds = parentBounds;
-        this.propertyResolver.resolve(parentBounds);
+        this.propertyResolver.resolve(parentBounds, (property) =>
+            this.animationController.currentValue(property),
+        );
         this.animationController.update(0);
     }
 
@@ -202,6 +208,38 @@ export abstract class UIElement<
      * @returns Whether the key was handled, the key event then being consumed.
      */
     public handleKeyDown?(keyboardEvent: KeyboardEvent): boolean;
+
+    /**
+     * Handles the clipboard events (`copy`, `cut` or `paste`) while the element has the focus,
+     * implemented by the elements editing text.
+     *
+     * @returns Whether the event was handled, its default action being then prevented.
+     */
+    public handleClipboard?(clipboardEvent: ClipboardEvent): boolean;
+
+    /**
+     * Handles the mouse wheel over the element or its children, implemented by the scrolling
+     * elements. Elements are asked from the deepest one under the mouse up to the root.
+     *
+     * @param deltaY - Distance to scroll, in pixels, positive downwards.
+     * @returns Whether the element scrolled, the wheel event being then consumed.
+     */
+    public handleWheel?(deltaY: number): boolean;
+
+    /** Handles the main mouse button pressed over the element, at a position in UI pixels. */
+    public handlePointerDown?(x: number, y: number, mouseEvent: MouseEvent): void;
+
+    /**
+     * Handles the mouse moving while the element is pressed, wherever the mouse is, e.g. to drag
+     * a scrollbar thumb or to select text.
+     */
+    public handlePointerDrag?(x: number, y: number): void;
+
+    /**
+     * Whether the children of the element can be hit at a position inside the element, e.g. not
+     * in the padding of a scrolling container, where its scrolled children are clipped.
+     */
+    public containsChildPoint?(x: number, y: number): boolean;
 
     /** Returns whether a canvas position is inside the element bounds, edges included. */
     public contains(px: number, py: number): boolean {

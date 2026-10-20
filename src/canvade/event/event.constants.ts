@@ -12,6 +12,9 @@ export const MOUSE_DOWN_EVENT = 'mousedown',
     VISIBILITY_CHANGE_EVENT = 'visibilitychange',
     KEY_DOWN_EVENT = 'keydown',
     KEY_UP_EVENT = 'keyup',
+    COPY_EVENT = 'copy',
+    CUT_EVENT = 'cut',
+    PASTE_EVENT = 'paste',
     /** Custom DOM event dispatched on the document by `Keyboard` when a control is pressed. */
     KEYBOARD_DOWN_EVENT = 'keyboarddown',
     /** Custom DOM event dispatched on the document by `Keyboard` when a control is released. */

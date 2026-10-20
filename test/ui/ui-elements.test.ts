@@ -361,3 +361,90 @@ describe('Input element', () => {
         ).toThrow('Invalid change handler for UI element "input"');
     });
 });
+
+describe('Element style', () => {
+    test('draws square buttons with their own border width, text color and font size', () => {
+        const { context } = createLayer(['button.square'], {
+            '.square': {
+                width: 80,
+                height: 20,
+                borderRadius: 0,
+                borderWidth: 2,
+                color: '#000',
+                textColor: '#fff',
+                fontSize: 12,
+                text: 'Square',
+            },
+        });
+
+        expect(context.rect).toHaveBeenCalledWith(0, 0, 80, 20);
+        expect(context.quadraticCurveTo).not.toHaveBeenCalled();
+        expect(context.lineWidth).toBe(2);
+        expect(context.font).toBe('12px Arial');
+        expect(context.fillStyle).toBe('#fff');
+    });
+
+    test('keeps the corner radius within the button, and can draw no border', () => {
+        const { context } = createLayer(['button.round'], {
+            '.round': { width: 80, height: 10, borderRadius: 30, borderWidth: 0 },
+        });
+
+        // A radius of half the height: the curves end at the middle of the sides
+        expect(context.quadraticCurveTo).toHaveBeenCalledWith(80, 0, 80, 5);
+        expect(context.stroke).not.toHaveBeenCalled();
+    });
+
+    test('draws containers and inputs with their own border width', () => {
+        const { context } = createLayer(['container.box', 'input.field'], {
+            '.box': { width: 50, height: 50, position: 'absolute', borderWidth: 0 },
+            '.field': { width: 50, height: 20, borderWidth: 3 },
+        });
+
+        // Only the input border is drawn
+        expect(context.strokeRect).toHaveBeenCalledOnce();
+        expect(context.lineWidth).toBe(3);
+    });
+});
+
+describe('Hover', () => {
+    test('shows on a clicked button, which keeps the focus', () => {
+        const { layer, root, context } = createLayer(['button.toggle'], {
+            '.toggle': {
+                width: 80,
+                height: 20,
+                backgroundColor: '#fff',
+                hoverBackgroundColor: '#ddd',
+                focusBackgroundColor: '#eee',
+            },
+        });
+        const fills: unknown[] = [];
+        vi.mocked(context.fill).mockImplementation(() => fills.push(context.fillStyle));
+        layer.uiRenderer.dispatch('mouseMove', mouseEvent('mouseMove', 10, 10));
+        click(layer, 10, 10);
+
+        layer.uiRenderer.render(context);
+        expect(root.children[0].isFocused()).toBe(true);
+        expect(fills.at(-1)).toBe('#ddd');
+
+        layer.uiRenderer.dispatch('mouseMove', mouseEvent('mouseMove', 300, 150));
+        layer.uiRenderer.render(context);
+        expect(fills.at(-1)).toBe('#eee');
+    });
+
+    test('is restored after the UI is rebuilt, until the mouse leaves the canvas', () => {
+        const styles = { '.toggle': { width: 80, height: 20 } };
+        const { layer, context } = createLayer(['button.toggle'], styles);
+        layer.uiRenderer.dispatch('mouseMove', mouseEvent('mouseMove', 10, 10));
+
+        const rebuilt = layer.uiRenderer.setUI(['button.toggle'], styles);
+        expect(rebuilt.children[0].isHovered()).toBe(false);
+        layer.uiRenderer.render(context);
+        expect(rebuilt.children[0].isHovered()).toBe(true);
+
+        layer.dispatch('mouseOut', mouseEvent('mouseOut', 10, 10));
+        expect(rebuilt.children[0].isHovered()).toBe(false);
+        const again = layer.uiRenderer.setUI(['button.toggle'], styles);
+        layer.uiRenderer.render(context);
+        expect(again.children[0].isHovered()).toBe(false);
+    });
+});

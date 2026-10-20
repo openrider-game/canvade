@@ -110,6 +110,11 @@ export class UIAnimationController<P extends UIPropertyMap> {
         }
     }
 
+    /** Current value of an animated property, `undefined` when it is not animated. */
+    public currentValue(property: string): number | undefined {
+        return this.animatedValues.get(property);
+    }
+
     /**
      * Stops the animation of a property where it is.
      *

@@ -38,7 +38,11 @@ export class UIElementTree {
             return null;
         }
 
-        for (let i = element.children.length - 1; i >= 0; i--) {
+        for (
+            let i = element.children.length - 1;
+            i >= 0 && this.reachesChildren(element, x, y);
+            i--
+        ) {
             const match = this.findElementAt(element.children[i], x, y);
             if (match) {
                 return match;
@@ -46,6 +50,11 @@ export class UIElementTree {
         }
 
         return element.receivesPointer() ? element : null;
+    }
+
+    /** Whether the children of an element can be hit at a position, see `containsChildPoint`. */
+    private static reachesChildren(element: UIElement, x: number, y: number): boolean {
+        return element.containsChildPoint?.(x, y) ?? true;
     }
 
     /**
@@ -80,7 +89,11 @@ export class UIElementTree {
             return false;
         }
 
-        for (let i = element.children.length - 1; i >= 0; i--) {
+        for (
+            let i = element.children.length - 1;
+            i >= 0 && this.reachesChildren(element, x, y);
+            i--
+        ) {
             if (this.handleClick(element.children[i], x, y, dispatchClick)) {
                 return true;
             }

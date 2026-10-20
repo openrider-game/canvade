@@ -1,12 +1,21 @@
-import { UIClickHandler, UIElement, UIValueHandler } from './ui-element';
+import { UIClickHandler, UIElement, UIScrollHandler, UIValueHandler } from './ui-element';
 import { UIElementFactory } from './ui-element-factory';
-import { createUIProperty, UIPropertyInstance, UIUnit } from './properties/ui-property.type';
+import { createUIProperty, UIPropertyInstance } from './properties/ui-property.type';
+import {
+    computeProperties,
+    parseStyleRules,
+    StyleRule,
+    UIStyleDefinition,
+    UIStyleProperties,
+} from './ui-style-rules';
 import {
     UI_CLASS_SEPARATOR,
     UI_CONTAINER_TYPE,
     UI_ROOT_SIZE,
     UI_TRANSPARENT,
 } from './ui.constants';
+
+export type { UIStyleDefinition, UIStyleProperties } from './ui-style-rules';
 
 /** Definition of an element with options, in a {@link UIStructureDefinition}. */
 export interface UIStructureElementDefinition {
@@ -18,12 +27,13 @@ export interface UIStructureElementDefinition {
 
 /**
  * Event handlers of an element, in a {@link UIStructureElementDefinition}. `change` and
- * `submit` are dispatched by the inputs.
+ * `submit` are dispatched by the inputs, `scroll` by the scrolling containers.
  */
 export interface UIStructureEvents {
     click?: UIClickHandler;
     change?: UIValueHandler;
     submit?: UIValueHandler;
+    scroll?: UIScrollHandler;
 }
 
 /**
@@ -44,24 +54,6 @@ export interface UIStructureEvents {
 export type UIStructureDefinition = Array<
     string | Record<string, UIStructureDefinition | UIStructureElementDefinition>
 >;
-/**
- * Property values of a style rule, by property name.
- *
- * `px`/`%` properties accept a `px` or `%` string, or a number of pixels.
- */
-export type UIStyleProperties = Record<string, UIUnit>;
-/**
- * Style rules of a UI tree, keyed by CSS-like selectors.
- *
- * A selector is a list of parts separated by spaces, each part matching an element and the
- * previous parts its ancestors (descendant combinator). A part is a type and class names
- * separated by dots, the type being optional (`button`, `.primary`, `button.primary`).
- *
- * Every matching rule applies, from the lowest specificity to the highest, later rules winning
- * between equal specificities. The specificity counts 10 per class name and 1 per type.
- */
-export type UIStyleDefinition = Record<string, UIStyleProperties>;
-
 /** Element parsed from a structure definition, before its creation. */
 interface ElementDescriptor {
     type: string;
@@ -70,20 +62,6 @@ interface ElementDescriptor {
     events?: UIStructureEvents;
     data?: Record<string, unknown>;
     parent?: ElementDescriptor;
-}
-
-/** Part of a style selector matching one element; an empty type matches any type. */
-interface SelectorPart {
-    type: string;
-    classNames: string[];
-}
-
-interface StyleRule {
-    selector: SelectorPart[];
-    specificity: number;
-    /** Position of the rule in the style definition, breaking specificity ties. */
-    order: number;
-    properties: UIStyleProperties;
 }
 
 /**
@@ -157,30 +135,6 @@ function createDescriptor(value: string, parent?: ElementDescriptor): ElementDes
     return descriptor;
 }
 
-function parseStyleRules(styleDefinition: UIStyleDefinition): StyleRule[] {
-    return Object.entries(styleDefinition).map(([selector, properties], order) => {
-        const parts = selector.trim().split(/\s+/).filter(Boolean).map(parseSelectorPart);
-        if (parts.length === 0) {
-            throw new Error('Style selectors cannot be empty');
-        }
-
-        return {
-            selector: parts,
-            specificity: parts.reduce(
-                (total, part) => total + part.classNames.length * 10 + (part.type ? 1 : 0),
-                0,
-            ),
-            order,
-            properties,
-        };
-    });
-}
-
-function parseSelectorPart(value: string): SelectorPart {
-    const [type = '', ...classNames] = value.split(UI_CLASS_SEPARATOR);
-    return { type, classNames: classNames.filter(Boolean) };
-}
-
 /**
  * Creates an element and its subtree, applying the style rules matching each element.
  *
@@ -200,7 +154,7 @@ function buildElement(
     const element = createElement(descriptor, properties);
     element.isTreeRoot = isTreeRoot;
     Object.assign(element.data, descriptor.data);
-    const { click, change, submit } = descriptor.events ?? {};
+    const { click, change, submit, scroll } = descriptor.events ?? {};
     if (click !== undefined) {
         element.onClick(checkHandler(click, 'click', descriptor));
     }
@@ -214,6 +168,12 @@ function buildElement(
                 valueHandler(event.detail.value, event.detail.target),
             );
         }
+    }
+    if (scroll !== undefined) {
+        const scrollHandler = checkHandler(scroll, 'scroll', descriptor);
+        element.subscribe('scroll', (event) =>
+            scrollHandler(event.detail.scrollTop, event.detail.target),
+        );
     }
     const currentPath = isTreeRoot ? [] : [...ancestors, descriptor];
 
@@ -234,57 +194,6 @@ function checkHandler<T>(handler: T, name: string, descriptor: ElementDescriptor
         throw new Error(`Invalid ${name} handler for UI element "${descriptor.type}"`);
     }
     return handler;
-}
-
-/**
- * Merges the properties of the rules matching the last element of `path`, from the lowest
- * specificity to the highest, then in declaration order.
- */
-function computeProperties(rules: StyleRule[], path: ElementDescriptor[]): UIStyleProperties {
-    const matchingRules = rules
-        .filter((rule) => matchesSelector(rule.selector, path))
-        .sort((left, right) => left.specificity - right.specificity || left.order - right.order);
-
-    const properties: UIStyleProperties = {};
-    for (const rule of matchingRules) {
-        Object.assign(properties, rule.properties);
-    }
-    return properties;
-}
-
-/**
- * Returns whether a selector matches the last element of `path`, its other parts matching
- * ancestors of the element, in order but not necessarily direct parents.
- */
-function matchesSelector(selector: SelectorPart[], path: ElementDescriptor[]): boolean {
-    let pathIndex = path.length - 1;
-    const lastSelector = selector[selector.length - 1];
-    const currentElement = path[pathIndex];
-    if (!lastSelector || !currentElement || !matchesPart(lastSelector, currentElement)) {
-        return false;
-    }
-    pathIndex--;
-
-    // Match the remaining parts right to left, each against the nearest matching ancestor
-    for (let selectorIndex = selector.length - 2; selectorIndex >= 0; selectorIndex--) {
-        let matchIndex = pathIndex;
-        while (matchIndex >= 0 && !matchesPart(selector[selectorIndex], path[matchIndex])) {
-            matchIndex--;
-        }
-        if (matchIndex < 0) {
-            return false;
-        }
-        pathIndex = matchIndex - 1;
-    }
-
-    return true;
-}
-
-function matchesPart(selector: SelectorPart, element: ElementDescriptor): boolean {
-    return (
-        (!selector.type || selector.type === element.type) &&
-        selector.classNames.every((className) => element.classNames.includes(className))
-    );
 }
 
 /**

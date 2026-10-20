@@ -2,6 +2,7 @@ import { EventEmitter } from '../event/event-emitter';
 import { GameEvent } from '../event/event-factory';
 import {
     DOMEvents,
+    GameClipboardEvent,
     GameKeyboardEvent,
     GameMouseEvent,
     GameWheelEvent,
@@ -66,6 +67,9 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
         this.subscribe('keyUp', this.onKeyUp);
         this.subscribe('keyboardDown', this.onKeyboardDown);
         this.subscribe('keyboardUp', this.onKeyboardUp);
+        this.subscribe('copy', this.onCopy);
+        this.subscribe('cut', this.onCut);
+        this.subscribe('paste', this.onPaste);
         this.subscribe('fixedUpdate', this.onFixedUpdate);
         this.subscribe('update', this.onUpdate);
         this.subscribe('render', this.onRender);
@@ -168,6 +172,18 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
 
     protected onKeyboardUp(e: CustomEvent<GameKeyboardEvent>): void {
         this.dispatchInputToLayers(e, (layer) => layer.dispatch('keyboardUp', e));
+    }
+
+    protected onCopy(e: CustomEvent<GameClipboardEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('copy', e));
+    }
+
+    protected onCut(e: CustomEvent<GameClipboardEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('cut', e));
+    }
+
+    protected onPaste(e: CustomEvent<GameClipboardEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('paste', e));
     }
 
     private onFixedUpdate(): void {

@@ -216,6 +216,8 @@ this.uiRenderer.setUI(
 - Positions and sizes are numbers (pixels), `'px'` or `'%'` values relative to the parent bounds.
 - Containers lay their children out in a column or a row (`flexDirection`), with `gap` and `padding`; absolute children are placed in the content box of the container instead.
 - `horizontalAlign` (`left`, `center`, `right`) and `verticalAlign` (`top`, `middle`, `bottom`) choose the edge the `x` and `y` offsets are measured from.
+- Buttons take a `borderRadius` (0 for square corners), a `borderWidth`, a `fontSize` and a `textColor` (the border `color` by default); containers and inputs take a `borderWidth` too.
+- A column container with `overflow: 'auto'` (scrollbar when needed) or `'scroll'` (always) scrolls its children vertically, with the mouse wheel or by dragging its scrollbar; it dispatches `scroll`, and `scrollTop` sets its scroll position from the styles.
 - `pointerEvents: 'none'` lets the mouse go through an element (not through its children), e.g. a transparent container laying out buttons over the game.
 - Numeric properties can be animated: `element.animate('x', '20%', { duration: 400 })`.
 - Custom elements are registered with `UIElementFactory.registerElement('type', ElementClass)`.
@@ -223,7 +225,7 @@ this.uiRenderer.setUI(
 Besides `container`, `button` and `text`, the built-in elements are:
 
 - `image`: draws the image at the `src` URL, with a `fit` of `contain` (default), `cover` or `fill`, and an `opacity`. `UIImage.load(src)` preloads an image.
-- `input`: a single line text field, focused by a click, with a `value`, a `placeholder` and a `maxLength`. It receives the typed keys instead of the keyboard controls, and dispatches `change` on each edit and `submit` on Enter, which can be handled in the structure: `{ "input.name": { events: { change: (value) => ..., submit: (value) => ... } } }`. Escape or a click outside of the UI removes the focus.
+- `input`: a single line text field, focused by a click, with a `value`, a `placeholder` and a `maxLength`. It receives the typed keys instead of the keyboard controls, and dispatches `change` on each edit and `submit` on Enter, which can be handled in the structure: `{ "input.name": { events: { change: (value) => ..., submit: (value) => ... } } }`. Escape or a click outside of the UI removes the focus. Text is selected with the mouse, with Shift and the arrows, Home or End, or entirely with Ctrl+A, and copied, cut and pasted with the usual shortcuts, through the clipboard events of the browser.
 
 The UI is laid out in UI pixels: the canvas is sized in device pixels to stay sharp, and the UI is scaled by the pixel ratio of the screen (`Display.uiScale`), so that it keeps its size on high density screens. The bounds of the elements and the positions given to their click handlers are in UI pixels. Pass a `uiScale` to the game options to use a fixed scale instead.
 
@@ -237,7 +239,6 @@ Pass a `debugLevel` to the game options to enable the `DebugUtils` logs up to th
 
 ## Roadmap
 
-- Text selection and clipboard support in the inputs
 - Multi-line texts, wrapped to the width of their element
 
 See the [open issues](https://github.com/tomiy/canvade/issues) for a full list of proposed features (and known issues).

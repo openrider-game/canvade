@@ -4,8 +4,11 @@ import { WorldVector } from '../world/world-vector';
 import { EventFactory } from './event-factory';
 import { Keyboard, KeyboardEventPayload } from './keyboard/keyboard';
 import { Mouse } from './mouse/mouse';
+import { GameClipboardEvent } from './types/dom-events';
 import {
     CONTEXT_MENU_EVENT,
+    COPY_EVENT,
+    CUT_EVENT,
     KEY_DOWN_EVENT,
     KEY_UP_EVENT,
     KEYBOARD_DOWN_EVENT,
@@ -15,6 +18,7 @@ import {
     MOUSE_MOVE_EVENT,
     MOUSE_OUT_EVENT,
     MOUSE_UP_EVENT,
+    PASTE_EVENT,
     VISIBILITY_CHANGE_EVENT,
     WHEEL_EVENT,
 } from './event.constants';
@@ -61,6 +65,9 @@ export class EventManager {
         );
 
         document.addEventListener(KEY_DOWN_EVENT, (e) => this.onKeyDown(e, stateManager));
+        for (const name of [COPY_EVENT, CUT_EVENT, PASTE_EVENT] as const) {
+            document.addEventListener(name, (e) => this.onClipboard(name, e, stateManager));
+        }
         document.addEventListener(KEY_UP_EVENT, (e) => this.onKeyUp(e, stateManager));
         document.addEventListener(KEYBOARD_DOWN_EVENT, (e) =>
             this.onKeyboardDown(e as CustomEvent<KeyboardEventPayload>, stateManager),
@@ -78,50 +85,22 @@ export class EventManager {
         e.preventDefault();
         this.ctx.canvas.focus();
 
-        const position = this.setMousePos(e, stateManager);
-        Mouse.lastClick.set(position);
-
-        const world = stateManager.getCurrent()?.getWorld();
-
-        if (world) {
-            Mouse.lastWorldClick.set(Mouse.worldPos);
-        }
-
-        const gameMouseEvent = EventFactory.createGameEvent({
-            name: 'mouseDown',
-            consumed: false,
-            mouseEvent: e,
-            position,
+        this.dispatchMouse('mouseDown', e, stateManager, (position) => {
+            Mouse.lastClick.set(position);
+            if (stateManager.getCurrent()?.getWorld()) {
+                Mouse.lastWorldClick.set(Mouse.worldPos);
+            }
         });
-        stateManager.getCurrent()?.dispatch('mouseDown', gameMouseEvent);
-
         return true;
     }
 
     public onMouseUp(e: MouseEvent, stateManager: StateManager): boolean {
-        const position = this.setMousePos(e, stateManager);
-        const gameMouseEvent = EventFactory.createGameEvent({
-            name: 'mouseUp',
-            consumed: false,
-            mouseEvent: e,
-            position,
-        });
-        stateManager.getCurrent()?.dispatch('mouseUp', gameMouseEvent);
-
+        this.dispatchMouse('mouseUp', e, stateManager);
         return true;
     }
 
     public onMouseMove(e: MouseEvent, stateManager: StateManager): boolean {
-        const position = this.setMousePos(e, stateManager);
-
-        const gameMouseEvent = EventFactory.createGameEvent({
-            name: 'mouseMove',
-            consumed: false,
-            mouseEvent: e,
-            position,
-        });
-        stateManager.getCurrent()?.dispatch('mouseMove', gameMouseEvent);
-
+        this.dispatchMouse('mouseMove', e, stateManager);
         return true;
     }
 
@@ -136,6 +115,7 @@ export class EventManager {
             name: 'scroll',
             consumed: false,
             wheelEvent: e,
+            position: this.setMousePos(e, stateManager),
             viewWidth: this.ctx.canvas.width,
             viewHeight: this.ctx.canvas.height,
         });
@@ -146,40 +126,17 @@ export class EventManager {
     }
 
     public onMouseEnter(e: MouseEvent, stateManager: StateManager): void {
-        const position = this.setMousePos(e, stateManager);
-        const gameMouseEvent = EventFactory.createGameEvent({
-            name: 'mouseEnter',
-            consumed: false,
-            mouseEvent: e,
-            position,
-        });
-        stateManager.getCurrent()?.dispatch('mouseEnter', gameMouseEvent);
+        this.dispatchMouse('mouseEnter', e, stateManager);
     }
 
     public onMouseOut(e: MouseEvent, stateManager: StateManager): void {
-        const position = this.setMousePos(e, stateManager);
-        const gameMouseEvent = EventFactory.createGameEvent({
-            name: 'mouseOut',
-            consumed: false,
-            mouseEvent: e,
-            position,
-        });
-        stateManager.getCurrent()?.dispatch('mouseOut', gameMouseEvent);
+        this.dispatchMouse('mouseOut', e, stateManager);
     }
 
     /** Dispatches `contextMenu` instead of opening the browser context menu. */
     public onContextMenu(e: MouseEvent, stateManager: StateManager): boolean {
         e.preventDefault();
-
-        const position = this.setMousePos(e, stateManager);
-        const gameMouseEvent = EventFactory.createGameEvent({
-            name: 'contextMenu',
-            consumed: false,
-            mouseEvent: e,
-            position,
-        });
-        stateManager.getCurrent()?.dispatch('contextMenu', gameMouseEvent);
-
+        this.dispatchMouse('contextMenu', e, stateManager);
         return true;
     }
 
@@ -191,21 +148,20 @@ export class EventManager {
      * Dispatches the raw `keyDown` event, then lets {@link Keyboard} update its controls, which
      * may synchronously trigger `keyboardDown`. Ignored when the canvas does not have the focus.
      *
-     * A key consumed by the state, e.g. typed in a UI input, does not trigger the controls.
+     * A key consumed by the state, e.g. typed in a UI input, does not trigger the controls. The
+     * clipboard shortcuts keep their default action, so that the browser fires the clipboard
+     * events.
      */
     public onKeyDown(e: KeyboardEvent, stateManager: StateManager): void {
-        if (document.activeElement === this.ctx.canvas) {
-            e.preventDefault();
+        if (document.activeElement !== this.ctx.canvas) {
+            return;
+        }
 
-            const gameKeyboardEvent = EventFactory.createGameEvent({
-                name: 'keyDown',
-                consumed: false,
-                keyboardEvent: e,
-            });
-            stateManager.getCurrent()?.dispatch('keyDown', gameKeyboardEvent);
-            if (!gameKeyboardEvent.detail.consumed) {
-                Keyboard.onKeyDown(e);
-            }
+        if (!EventManager.isClipboardShortcut(e)) {
+            e.preventDefault();
+        }
+        if (!this.dispatchKey('keyDown', e, stateManager)) {
+            Keyboard.onKeyDown(e);
         }
     }
 
@@ -214,39 +170,96 @@ export class EventManager {
      * may synchronously trigger `keyboardUp`. Ignored when the canvas does not have the focus.
      */
     public onKeyUp(e: KeyboardEvent, stateManager: StateManager): void {
-        if (document.activeElement === this.ctx.canvas) {
-            e.preventDefault();
-
-            const gameKeyboardEvent = EventFactory.createGameEvent({
-                name: 'keyUp',
-                consumed: false,
-                keyboardEvent: e,
-            });
-            stateManager.getCurrent()?.dispatch('keyUp', gameKeyboardEvent);
-            Keyboard.onKeyUp(e);
+        if (document.activeElement !== this.ctx.canvas) {
+            return;
         }
+
+        e.preventDefault();
+        this.dispatchKey('keyUp', e, stateManager);
+        Keyboard.onKeyUp(e);
+    }
+
+    /**
+     * Dispatches a `copy`, `cut` or `paste` event, ignored when the canvas does not have the
+     * focus. Its default action is prevented when a state consumes it, e.g. a UI input setting or
+     * reading the clipboard data.
+     */
+    public onClipboard(
+        name: 'copy' | 'cut' | 'paste',
+        e: ClipboardEvent,
+        stateManager: StateManager,
+    ): void {
+        if (document.activeElement !== this.ctx.canvas) {
+            return;
+        }
+
+        const gameClipboardEvent = EventFactory.createGameEvent<GameClipboardEvent>({
+            name,
+            consumed: false,
+            clipboardEvent: e,
+        });
+        stateManager.getCurrent()?.dispatch(name, gameClipboardEvent);
+        if (gameClipboardEvent.detail.consumed) {
+            e.preventDefault();
+        }
+    }
+
+    /** Whether a key event is a copy, cut or paste shortcut (Ctrl or Meta with C, X or V). */
+    private static isClipboardShortcut(e: KeyboardEvent): boolean {
+        return (e.ctrlKey || e.metaKey) && ['c', 'x', 'v'].includes(e.key?.toLowerCase());
     }
 
     /** Dispatches `keyboardDown` when {@link Keyboard} reports a pressed control. */
     public onKeyboardDown(e: CustomEvent<KeyboardEventPayload>, stateManager: StateManager): void {
-        const gameKeyboardEvent = EventFactory.createGameEvent({
-            name: 'keyboardDown',
-            consumed: false,
-            keyboardEvent: e.detail.keyboardEvent,
-            key: e.detail.key,
-        });
-        stateManager.getCurrent()?.dispatch('keyboardDown', gameKeyboardEvent);
+        this.dispatchKey('keyboardDown', e.detail.keyboardEvent, stateManager, e.detail.key);
     }
 
     /** Dispatches `keyboardUp` when {@link Keyboard} reports a released control. */
     public onKeyboardUp(e: CustomEvent<KeyboardEventPayload>, stateManager: StateManager): void {
+        this.dispatchKey('keyboardUp', e.detail.keyboardEvent, stateManager, e.detail.key);
+    }
+
+    /**
+     * Records the mouse position and dispatches a mouse event to the current state.
+     *
+     * @param beforeDispatch - Called with the position in canvas pixels before dispatching.
+     */
+    private dispatchMouse(
+        name: 'mouseDown' | 'mouseUp' | 'mouseMove' | 'mouseEnter' | 'mouseOut' | 'contextMenu',
+        e: MouseEvent,
+        stateManager: StateManager,
+        beforeDispatch?: (position: Vector) => void,
+    ): void {
+        const position = this.setMousePos(e, stateManager);
+        beforeDispatch?.(position);
+        stateManager
+            .getCurrent()
+            ?.dispatch(
+                name,
+                EventFactory.createGameEvent({ name, consumed: false, mouseEvent: e, position }),
+            );
+    }
+
+    /**
+     * Dispatches a key event to the current state.
+     *
+     * @param key - Name of the control, for `keyboardDown` and `keyboardUp`.
+     * @returns Whether the state consumed the event.
+     */
+    private dispatchKey(
+        name: 'keyDown' | 'keyUp' | 'keyboardDown' | 'keyboardUp',
+        keyboardEvent: KeyboardEvent,
+        stateManager: StateManager,
+        key?: string,
+    ): boolean {
         const gameKeyboardEvent = EventFactory.createGameEvent({
-            name: 'keyboardUp',
+            name,
             consumed: false,
-            keyboardEvent: e.detail.keyboardEvent,
-            key: e.detail.key,
+            keyboardEvent,
+            ...(key === undefined ? {} : { key }),
         });
-        stateManager.getCurrent()?.dispatch('keyboardUp', gameKeyboardEvent);
+        stateManager.getCurrent()?.dispatch(name, gameKeyboardEvent);
+        return gameKeyboardEvent.detail.consumed;
     }
 
     /**

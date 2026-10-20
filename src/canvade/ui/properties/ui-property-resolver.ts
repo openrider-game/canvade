@@ -10,9 +10,15 @@ export class UIPropertyResolver<P extends UIPropertyMap> {
      *
      * A property depending on another one (e.g. `x` on `width` when aligned right) resolves its
      * dependency on demand, so the resolution order does not matter.
+     *
+     * @param currentValue - Value a dependency has in place of its resolved value, if any, e.g.
+     *   the animated `height` of an element aligned to the bottom of its parent.
      */
-    public resolve(bounds: UIPropertyBounds): void {
-        const context = this.createContext(bounds);
+    public resolve(
+        bounds: UIPropertyBounds,
+        currentValue?: (propertyName: string) => number | undefined,
+    ): void {
+        const context = this.createContext(bounds, currentValue);
         for (const property of Object.values(this.properties)) {
             if (property instanceof UIResolvableProperty) {
                 property.setValue(property.resolve(context));
@@ -39,7 +45,10 @@ export class UIPropertyResolver<P extends UIPropertyMap> {
         return property.resolveValue(value, this.createContext(bounds));
     }
 
-    private createContext(bounds: UIPropertyBounds): UIPropertyResolutionContext {
+    private createContext(
+        bounds: UIPropertyBounds,
+        currentValue?: (propertyName: string) => number | undefined,
+    ): UIPropertyResolutionContext {
         const context: UIPropertyResolutionContext = {
             parentBounds: bounds,
             getValue: (name) => {
@@ -50,6 +59,11 @@ export class UIPropertyResolver<P extends UIPropertyMap> {
                 return property.getValue();
             },
             resolveProperty: (name) => {
+                const current = currentValue?.(name);
+                if (current !== undefined) {
+                    return current;
+                }
+
                 const property = this.properties[name];
                 if (!(property instanceof UIResolvableProperty)) {
                     throw new Error(`Cannot resolve UI property with unknown dependency "${name}"`);
