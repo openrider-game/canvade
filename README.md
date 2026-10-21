@@ -16,7 +16,7 @@
     Canvade is an engine for canvas based browser games.
     <br />
     <br />
-    <a href="https://tomiy.me/openrider/">View Demo</a>
+    <a href="https://tomiy.online/openrider/">View Demo</a>
     ·
     <a href="https://github.com/tomiy/canvade/issues">Report Bug</a>
     ·
@@ -292,7 +292,9 @@ Project Link: [https://github.com/tomiy/canvade](https://github.com/tomiy/canvad
 
 ## Acknowledgments
 
-tbd.
+[bezier-easing](https://github.com/gre/bezier-easing) for animation logic with bezier curves
+
+The freerider community at large, for giving me a reasonto to keep working on game dev
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
