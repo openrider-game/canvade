@@ -222,8 +222,9 @@ this.uiRenderer.setUI(
 - Numeric properties can be animated: `element.animate('x', '20%', { duration: 400 })`.
 - Custom elements are registered with `UIElementFactory.registerElement('type', ElementClass)`.
 
-Besides `container`, `button` and `text`, the built-in elements are:
+Besides `container` and `button`, the built-in elements are:
 
+- `text`: lines of text, split at the line breaks and, with `wrap: 'word'`, between words to fit the width of the element. `textAlign` (`left`, `center`, `right`) aligns them, and `lineHeight` sets their spacing as a multiple of the `fontSize`. `wrapText` exposes the wrapping to custom elements.
 - `image`: draws the image at the `src` URL, with a `fit` of `contain` (default), `cover` or `fill`, and an `opacity`. `UIImage.load(src)` preloads an image.
 - `input`: a single line text field, focused by a click, with a `value`, a `placeholder` and a `maxLength`. It receives the typed keys instead of the keyboard controls, and dispatches `change` on each edit and `submit` on Enter, which can be handled in the structure: `{ "input.name": { events: { change: (value) => ..., submit: (value) => ... } } }`. Escape or a click outside of the UI removes the focus. Text is selected with the mouse, with Shift and the arrows, Home or End, or entirely with Ctrl+A, and copied, cut and pasted with the usual shortcuts, through the clipboard events of the browser.
 
@@ -238,8 +239,6 @@ Pass a `debugLevel` to the game options to enable the `DebugUtils` logs up to th
 <!-- ROADMAP -->
 
 ## Roadmap
-
-- Multi-line texts, wrapped to the width of their element
 
 See the [open issues](https://github.com/tomiy/canvade/issues) for a full list of proposed features (and known issues).
 

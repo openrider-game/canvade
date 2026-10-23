@@ -20,6 +20,8 @@ export const UI_CONTAINER_TYPE = 'container',
     UI_FONT_FAMILY = 'Arial',
     /** Font size of the buttons and texts, in pixels. */
     UI_DEFAULT_FONT_SIZE = 14,
+    /** Distance between two lines of a text, as a multiple of its font size. */
+    UI_DEFAULT_LINE_HEIGHT = 1.2,
     /** Default `text` of a button. */
     UI_BUTTON_TEXT = 'Button',
     /** Default `text` of a text element. */
