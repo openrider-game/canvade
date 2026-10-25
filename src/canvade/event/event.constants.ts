@@ -1,6 +1,6 @@
 /**
- * DOM events bridged by the event manager: mouse events are listened to on the canvas,
- * visibility and key events on the document.
+ * DOM events bridged by the event manager: mouse and touch events are listened to on the
+ * canvas, visibility and key events on the document.
  */
 export const MOUSE_DOWN_EVENT = 'mousedown',
     MOUSE_UP_EVENT = 'mouseup',
@@ -9,6 +9,10 @@ export const MOUSE_DOWN_EVENT = 'mousedown',
     MOUSE_ENTER_EVENT = 'mouseenter',
     MOUSE_OUT_EVENT = 'mouseout',
     CONTEXT_MENU_EVENT = 'contextmenu',
+    TOUCH_START_EVENT = 'touchstart',
+    TOUCH_MOVE_EVENT = 'touchmove',
+    TOUCH_END_EVENT = 'touchend',
+    TOUCH_CANCEL_EVENT = 'touchcancel',
     VISIBILITY_CHANGE_EVENT = 'visibilitychange',
     KEY_DOWN_EVENT = 'keydown',
     KEY_UP_EVENT = 'keyup',

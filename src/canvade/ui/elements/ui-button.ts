@@ -43,8 +43,9 @@ const defaultUIButtonProperties: UIButtonProperties = {
 /**
  * Button with a centered text, of type `button`, with rounded corners by default.
  *
- * Its background color reflects its interaction state, the active (pressed) state taking
- * precedence over the hovered state, itself over the focused state.
+ * Its background color reflects its interaction state, the active state (pressed by the mouse)
+ * or pressed state (by a finger) taking precedence over the hovered state, itself over the
+ * focused state.
  */
 export class UIButton extends UIElement<UIButtonProperties> {
     constructor(classNames: string[] = [], properties: UIButtonProperties = {}) {
@@ -53,13 +54,14 @@ export class UIButton extends UIElement<UIButtonProperties> {
 
     protected override renderElement(ctx: CanvasRenderingContext2D): void {
         // A clicked button keeps the focus: hovering it still shows the hover color
-        const backgroundColor = this.isActive()
-            ? this.v('activeBackgroundColor', 'backgroundColor')
-            : this.isHovered()
-              ? this.v('hoverBackgroundColor', 'backgroundColor')
-              : this.isFocused()
-                ? this.v('focusBackgroundColor', 'backgroundColor')
-                : this.v('backgroundColor');
+        const backgroundColor =
+            this.isActive() || this.isPressed()
+                ? this.v('activeBackgroundColor', 'backgroundColor')
+                : this.isHovered()
+                  ? this.v('hoverBackgroundColor', 'backgroundColor')
+                  : this.isFocused()
+                    ? this.v('focusBackgroundColor', 'backgroundColor')
+                    : this.v('backgroundColor');
         const { x, y, width, height } = this.getBounds();
         const borderWidth = this.v('borderWidth');
 

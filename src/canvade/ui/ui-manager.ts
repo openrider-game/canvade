@@ -7,12 +7,25 @@ import {
     GameClipboardEvent,
     GameKeyboardEvent,
     GameMouseEvent,
+    GameTouchEvent,
     GameWheelEvent,
 } from '../event/types/dom-events';
 import { GameLoopEvents, GameRenderEvent, GameUpdateEvent } from '../event/types/game-loop-events';
 import { StateEvents } from '../event/types/state-events';
 import { UIElement } from './ui-element';
 import { buildUIElementTree, UIStructureDefinition, UIStyleDefinition } from './ui-parser';
+
+/** Touch on the elements of a manager. */
+interface UITouch {
+    /** Element the touch pressed when it started, clicked if released over it. */
+    start: UIElement | null;
+    /** Element under the touch, pressed by it. */
+    current: UIElement | null;
+    /** Last position of the touch, in UI pixels. */
+    position: Vector;
+    /** Whether the touch drags its element (see `UIElement.handlePointerDrag`) rather than sliding. */
+    drags: boolean;
+}
 
 /**
  * Renders a UI tree and routes the mouse and the keyboard to it. Each `Layer` owns one.
@@ -24,6 +37,12 @@ import { buildUIElementTree, UIStructureDefinition, UIStyleDefinition } from './
  * - `mouseUp` dispatches `click` when released over the active element, then clears it;
  * - `mouseMove` while an element is pressed lets it follow the mouse (see
  *   `UIElement.handlePointerDrag`);
+ * - `touchStart` over an element focuses and presses it; each finger then presses the element
+ *   under it, sliding from an element to the next one, until `touchEnd`, which dispatches
+ *   `click` when released over the element it started on (a tap). A finger on an element
+ *   following the pointer drags it instead (see `UIElement.handlePointerDrag`), e.g. to scroll.
+ *   Several fingers press several elements at once, each element dispatching `press` and
+ *   `release` (see `UIElement.press`), as the main mouse button does too;
  * - `scroll` (the mouse wheel) scrolls the elements under the mouse (see `UIElement.handleWheel`);
  * - `keyDown`, `copy`, `cut` and `paste` are given to the focused element (see
  *   `UIElement.handleKeyDown` and `UIElement.handleClipboard`).
@@ -33,7 +52,7 @@ import { buildUIElementTree, UIStructureDefinition, UIStyleDefinition } from './
  * other buttons are consumed when pressed over an element, but never released by the UI, so
  * that a drag started outside of it can end over it. The mouse wheel over an element is consumed
  * too, so that it does not reach the layers below, as are the keys and clipboard events handled
- * by the focused element. The focused and active elements are global: pressing an element of a
+ * by the focused element, and the touches starting over an element, with their moves and end. The focused and active elements are global: pressing an element of a
  * manager clears them in the manager that previously held them.
  *
  * The tree is laid out in UI pixels, scaled by {@link Display.uiScale} so that the UI keeps its
@@ -47,6 +66,12 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
     private pointer: Vector | null = null;
     /** Whether the hovered element must be found again once the new tree is laid out. */
     private hoverPending = false;
+    /** Element pressed by the main mouse button. */
+    private mousePressed: UIElement | null = null;
+    /** Touches on the elements of this manager, by id. */
+    private readonly touches = new Map<number, UITouch>();
+    /** Whether the touches must find their elements again once the new tree is laid out. */
+    private touchesPending = false;
 
     /**
      * Creates a manager, optionally with an initial UI tree.
@@ -65,6 +90,9 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         this.subscribe('mouseMove', this.onMouseMove);
         this.subscribe('mouseUp', this.onMouseUp);
         this.subscribe('mouseOut', this.onMouseOut);
+        this.subscribe('touchStart', this.onTouchStart);
+        this.subscribe('touchMove', this.onTouchMove);
+        this.subscribe('touchEnd', this.onTouchEnd);
         this.subscribe('keyDown', this.onKeyDown);
         this.subscribe('scroll', this.onScroll);
         this.subscribe('copy', this.onClipboard);
@@ -76,14 +104,19 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
      * Replaces the UI tree, clearing the focused and active elements of the previous one.
      *
      * The element under the mouse is hovered as soon as the new tree is rendered, without
-     * waiting for the mouse to move.
+     * waiting for the mouse to move, and the fingers press the elements under them: the elements
+     * they pressed are only released then, so that a finger holding a button of both trees keeps
+     * it held.
      */
     public setRootElement(rootNode: UIElement): void {
         if (UIManager.interactionOwner === this) {
             this.clearInteractionState();
         }
+        this.mousePressed?.release();
+        this.mousePressed = null;
         this.rootNode = rootNode;
         this.hoverPending = true;
+        this.touchesPending = this.touches.size > 0;
     }
 
     /**
@@ -97,6 +130,11 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         const rootNode = buildUIElementTree(structure, styles);
         this.setRootElement(rootNode);
         return rootNode;
+    }
+
+    /** Root of the UI tree, a container covering the whole canvas, if any. */
+    public getRootElement(): UIElement | undefined {
+        return this.rootNode;
     }
 
     /** Renders the UI tree over the whole canvas, scaled to UI pixels, if any. */
@@ -131,6 +169,10 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
                 pointer ? this.rootNode.findElementAt(pointer.x, pointer.y) : null,
             );
         }
+        if (this.touchesPending) {
+            this.touchesPending = false;
+            this.rebindTouches();
+        }
     }
 
     private onRender(event: CustomEvent<GameRenderEvent>): void {
@@ -153,6 +195,9 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
             if (mainButton) {
                 this.claimInteraction(target);
                 target.handlePointerDown?.(x, y, event.detail.mouseEvent);
+                this.mousePressed?.release();
+                this.mousePressed = target;
+                target.press();
             }
             event.detail.consumed = true;
         } else if (mainButton && UIManager.interactionOwner === this) {
@@ -178,6 +223,88 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
             event.detail.consumed = true;
         }
         this.rootNode.setActiveElement(null);
+        this.mousePressed?.release();
+        this.mousePressed = null;
+    }
+
+    /** Focuses and presses the element under a new touch, consuming the touch. */
+    private onTouchStart(event: CustomEvent<GameTouchEvent>): void {
+        if (event.detail.consumed || !this.rootNode) {
+            return;
+        }
+
+        const position = this.toUIPosition(event.detail.position);
+        const target = this.rootNode.findElementAt(position.x, position.y);
+        if (!target) {
+            return;
+        }
+
+        this.claimFocus(target);
+        target.handlePointerDown?.(position.x, position.y, event.detail.touchEvent);
+        target.press();
+        this.touches.set(event.detail.id, {
+            start: target,
+            current: target,
+            position,
+            drags: target.handlePointerDrag !== undefined,
+        });
+        event.detail.consumed = true;
+    }
+
+    /** Lets a touch drag its element, or slide to the element under it. */
+    private onTouchMove(event: CustomEvent<GameTouchEvent>): void {
+        const touch = this.touches.get(event.detail.id);
+        if (!touch || !this.rootNode) {
+            return;
+        }
+
+        event.detail.consumed = true;
+        const { x, y } = (touch.position = this.toUIPosition(event.detail.position));
+        if (touch.drags) {
+            touch.start?.handlePointerDrag?.(x, y);
+        } else {
+            this.slide(touch, this.rootNode.findElementAt(x, y));
+        }
+    }
+
+    /** Releases the element of a touch, clicking it when released over the element it started on. */
+    private onTouchEnd(event: CustomEvent<GameTouchEvent>): void {
+        const touch = this.touches.get(event.detail.id);
+        if (!touch) {
+            return;
+        }
+
+        event.detail.consumed = true;
+        this.touches.delete(event.detail.id);
+        const { x, y } = this.toUIPosition(event.detail.position);
+        const target = this.rootNode?.findElementAt(x, y) ?? null;
+        touch.current?.release();
+        if (touch.start && target === touch.start) {
+            touch.start.handleClick(x, y, event.detail.touchEvent);
+        }
+    }
+
+    /** Moves a touch onto another element, or off the elements with `null`. */
+    private slide(touch: UITouch, target: UIElement | null): void {
+        if (target === touch.current) {
+            return;
+        }
+        touch.current?.release();
+        target?.press();
+        touch.current = target;
+    }
+
+    /**
+     * Presses the elements of the new tree under the touches, releasing the ones of the previous
+     * tree right before, in the same frame.
+     */
+    private rebindTouches(): void {
+        for (const touch of this.touches.values()) {
+            const target = this.rootNode?.findElementAt(touch.position.x, touch.position.y) ?? null;
+            this.slide(touch, target);
+            touch.start = target;
+            touch.drags = target?.handlePointerDrag !== undefined;
+        }
     }
 
     private onMouseMove(event: CustomEvent<GameMouseEvent>): void {
@@ -273,13 +400,18 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
 
     /** Focuses and activates an element, taking the interaction over from the other managers. */
     private claimInteraction(target: UIElement): void {
+        this.claimFocus(target);
+        this.rootNode?.setActiveElement(target);
+    }
+
+    /** Focuses an element, taking the interaction over from the other managers. */
+    private claimFocus(target: UIElement): void {
         if (UIManager.interactionOwner && UIManager.interactionOwner !== this) {
             UIManager.interactionOwner.clearInteractionState();
         }
 
         UIManager.interactionOwner = this;
         this.rootNode?.setFocusedElement(target);
-        this.rootNode?.setActiveElement(target);
     }
 
     private clearInteractionState(): void {

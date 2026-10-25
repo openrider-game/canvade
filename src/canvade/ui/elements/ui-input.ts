@@ -204,8 +204,12 @@ export class UIInput extends UIElement<UIInputProperties> {
     }
 
     /** Moves the caret under the mouse, extending the selection when Shift is held. */
-    public override handlePointerDown(x: number, _y: number, mouseEvent: MouseEvent): void {
-        this.moveCaret(this.indexAt(x), mouseEvent.shiftKey);
+    public override handlePointerDown(
+        x: number,
+        _y: number,
+        inputEvent: MouseEvent | TouchEvent,
+    ): void {
+        this.moveCaret(this.indexAt(x), inputEvent.shiftKey);
     }
 
     /** Selects the text from where the mouse was pressed to where it is. */

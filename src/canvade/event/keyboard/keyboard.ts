@@ -4,7 +4,8 @@ import { LATIN_LETTER_PATTERN, LETTER_CODE_PATTERN } from './keyboard.constants'
 
 /** Detail of the custom events dispatched by {@link Keyboard} when a control changes. */
 export type KeyboardEventPayload = {
-    keyboardEvent: KeyboardEvent;
+    /** Key event pressing or releasing the control, null without a key (see {@link Keyboard.press}). */
+    keyboardEvent: KeyboardEvent | null;
     /** Name of the control, as registered with {@link Keyboard.registerControl}. */
     key: string;
 };
@@ -17,7 +18,9 @@ export type KeyboardEventPayload = {
  * state can be polled with {@link Keyboard.isDown}, typically in `fixedUpdate`, or followed with
  * the `keyboardDown` and `keyboardUp` events of the states, whose `key` is the control name.
  *
- * The key events are fed by the event manager while the canvas has the focus.
+ * The key events are fed by the event manager while the canvas has the focus. A control can also
+ * be held without its key, e.g. by an on-screen button of a touch screen, with
+ * {@link Keyboard.press} and {@link Keyboard.release}.
  */
 export abstract class Keyboard {
     private static controls: Map<string, Control> = new Map<string, Control>();
@@ -47,6 +50,39 @@ export abstract class Keyboard {
         }
 
         return holding && (!fireOnce || !firedOnce);
+    }
+
+    /**
+     * Holds a registered control down without its key, as its key would, dispatching
+     * {@link KEYBOARD_DOWN_EVENT} when newly held, e.g. while an on-screen button is touched.
+     */
+    public static press(name: string): void {
+        if (!Keyboard.controls.has(name) || Keyboard.holding.get(name)) {
+            return;
+        }
+        Keyboard.holding.set(name, true);
+        Keyboard.dispatchControl(KEYBOARD_DOWN_EVENT, null, name);
+    }
+
+    /** Releases a control held down, dispatching {@link KEYBOARD_UP_EVENT}, as its key would. */
+    public static release(name: string): void {
+        if (!Keyboard.holding.get(name)) {
+            return;
+        }
+        Keyboard.holding.set(name, false);
+        Keyboard.firedOnce.set(name, false);
+        Keyboard.dispatchControl(KEYBOARD_UP_EVENT, null, name);
+    }
+
+    /** Dispatches the custom event of a control change on the document. */
+    private static dispatchControl(
+        type: typeof KEYBOARD_DOWN_EVENT | typeof KEYBOARD_UP_EVENT,
+        keyboardEvent: KeyboardEvent | null,
+        key: string,
+    ): void {
+        document.dispatchEvent(
+            new CustomEvent<KeyboardEventPayload>(type, { detail: { keyboardEvent, key } }),
+        );
     }
 
     /**
@@ -105,12 +141,7 @@ export abstract class Keyboard {
                 e.preventDefault();
                 if (!Keyboard.holding.get(key)) {
                     Keyboard.holding.set(key, true);
-
-                    const event: CustomEvent<KeyboardEventPayload> = new CustomEvent(
-                        KEYBOARD_DOWN_EVENT,
-                        { detail: { keyboardEvent: e, key } },
-                    );
-                    document.dispatchEvent(event);
+                    Keyboard.dispatchControl(KEYBOARD_DOWN_EVENT, e, key);
                 }
             }
         });
@@ -134,14 +165,7 @@ export abstract class Keyboard {
                 if (Keyboard.holding.get(key)) {
                     Keyboard.holding.set(key, false);
                     Keyboard.firedOnce.set(key, false);
-
-                    const event: CustomEvent<KeyboardEventPayload> = new CustomEvent(
-                        KEYBOARD_UP_EVENT,
-                        {
-                            detail: { keyboardEvent: e, key },
-                        },
-                    );
-                    document.dispatchEvent(event);
+                    Keyboard.dispatchControl(KEYBOARD_UP_EVENT, e, key);
                 }
             }
         });

@@ -12,6 +12,9 @@ type UIInputEvent =
     | 'mouseDown'
     | 'mouseMove'
     | 'mouseUp'
+    | 'touchStart'
+    | 'touchMove'
+    | 'touchEnd'
     | 'scroll'
     | 'keyDown'
     | 'copy'
@@ -23,10 +26,10 @@ type UIInputEvent =
  *
  * Subclasses subscribe to the events they need in {@link Layer.initLayer}. Each layer owns a
  * {@link UIManager}, which receives `update`, `render`, `mouseDown`, `mouseMove`, `mouseUp`,
- * `mouseOut`, `scroll`, `keyDown`, `copy`, `cut` and `paste` after the receivers subscribed in
- * `initLayer`: the UI is drawn over the layer content, and a receiver can set the `consumed` flag
- * of an input event to hide it from the UI. When the UI handles an input event, it consumes it,
- * so the layers below do not receive it.
+ * `mouseOut`, the touch events, `scroll`, `keyDown`, `copy`, `cut` and `paste` after the
+ * receivers subscribed in `initLayer`: the UI is drawn over the layer content, and a receiver can
+ * set the `consumed` flag of an input event to hide it from the UI. When the UI handles an input
+ * event, it consumes it, so the layers below do not receive it.
  */
 export abstract class Layer extends EventEmitter<LayerEvents> {
     /** UI of the layer, set with {@link UIManager.setUI}. */
@@ -43,6 +46,9 @@ export abstract class Layer extends EventEmitter<LayerEvents> {
         this.subscribe('mouseDown', (e) => this.forwardToUI('mouseDown', e));
         this.subscribe('mouseMove', (e) => this.forwardToUI('mouseMove', e));
         this.subscribe('mouseUp', (e) => this.forwardToUI('mouseUp', e));
+        this.subscribe('touchStart', (e) => this.forwardToUI('touchStart', e));
+        this.subscribe('touchMove', (e) => this.forwardToUI('touchMove', e));
+        this.subscribe('touchEnd', (e) => this.forwardToUI('touchEnd', e));
         this.subscribe('scroll', (e) => this.forwardToUI('scroll', e));
         this.subscribe('keyDown', (e) => this.forwardToUI('keyDown', e));
         this.subscribe('copy', (e) => this.forwardToUI('copy', e));

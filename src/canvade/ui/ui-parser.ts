@@ -1,4 +1,10 @@
-import { UIClickHandler, UIElement, UIScrollHandler, UIValueHandler } from './ui-element';
+import {
+    UIClickHandler,
+    UIElement,
+    UIPressHandler,
+    UIScrollHandler,
+    UIValueHandler,
+} from './ui-element';
 import { UIElementFactory } from './ui-element-factory';
 import { createUIProperty, UIPropertyInstance } from './properties/ui-property.type';
 import {
@@ -27,10 +33,13 @@ export interface UIStructureElementDefinition {
 
 /**
  * Event handlers of an element, in a {@link UIStructureElementDefinition}. `change` and
- * `submit` are dispatched by the inputs, `scroll` by the scrolling containers.
+ * `submit` are dispatched by the inputs, `scroll` by the scrolling containers, `press` and
+ * `release` by every element held by the mouse or by fingers.
  */
 export interface UIStructureEvents {
     click?: UIClickHandler;
+    press?: UIPressHandler;
+    release?: UIPressHandler;
     change?: UIValueHandler;
     submit?: UIValueHandler;
     scroll?: UIScrollHandler;
@@ -154,9 +163,18 @@ function buildElement(
     const element = createElement(descriptor, properties);
     element.isTreeRoot = isTreeRoot;
     Object.assign(element.data, descriptor.data);
-    const { click, change, submit, scroll } = descriptor.events ?? {};
+    const { click, change, submit, scroll, press, release } = descriptor.events ?? {};
     if (click !== undefined) {
         element.onClick(checkHandler(click, 'click', descriptor));
+    }
+    for (const [name, handler] of [
+        ['press', press],
+        ['release', release],
+    ] as const) {
+        if (handler !== undefined) {
+            const pressHandler = checkHandler(handler, name, descriptor);
+            element.subscribe(name, (event) => pressHandler(event.detail.target));
+        }
     }
     for (const [name, handler] of [
         ['change', change],

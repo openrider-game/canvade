@@ -58,6 +58,7 @@ It provides:
 - a fixed timestep game loop, separating the physics updates from the rendering
 - states stacked by a state manager, each made of layers receiving the input from the top layer down
 - keyboard controls and mouse positions, in canvas pixels and in world units
+- touch screens: each touch dispatched as an event, a single finger acting as the mouse and two fingers pinching, so that a game made for the mouse works with the fingers
 - a world with a camera and a zoom, and the conversions between world and canvas coordinates
 - a declarative canvas UI: elements described by a structure and styled by CSS-like selectors, with relative units, alignment, absolute positioning, interaction states and animations, scaled to keep its size on high density screens
 - built-in UI elements: containers, buttons, texts, images and text inputs
@@ -146,7 +147,7 @@ The game loop dispatches these events to the current state and its layers:
 - `update`, once per frame, with the `progress` towards the next fixed update and the elapsed `delta` in milliseconds, to interpolate the rendering between two fixed updates
 - `render`, once per frame, with the canvas context, after the canvas has been cleared
 
-States also receive `enter` and `leave` when pushed or popped, and the DOM events of the canvas (`mouseDown`, `mouseUp`, `mouseMove`, `scroll`, `contextMenu`, `keyDown`, `keyboardDown`...).
+States also receive `enter` and `leave` when pushed or popped, and the DOM events of the canvas (`mouseDown`, `mouseUp`, `mouseMove`, `scroll`, `contextMenu`, `touchStart`, `pinchMove`, `keyDown`, `keyboardDown`...): the game listens to the DOM, the states and layers subscribe to its events.
 Input events go from the top layer down, and stop as soon as a layer sets `event.detail.consumed`.
 
 States are created when added to the game, before being pushed: since `initState` and `initLayers` run in the `State` constructor, they must not rely on the fields of the subclass. The same goes for `initLayer`, run in the `Layer` constructor.
@@ -181,7 +182,22 @@ this.subscribe("keyboardDown", (e) => console.log(e.detail.key));
 
 Letter controls match the letter typed with the keyboard layout of the player (`KEYZ` is the Z key of an AZERTY keyboard too), other controls match the physical key position.
 
+A control can be held down without its key, e.g. by an on-screen button: `Keyboard.press("jump")` and `Keyboard.release("jump")` dispatch `keyboardDown` and `keyboardUp` as the key would, their `keyboardEvent` being `null`.
+
 `Mouse.mousePos` holds the mouse position in canvas pixels. When the current state has a world (`state.setWorld(world)`), `Mouse.worldPos` holds it in world units: a `World` has a `camera` and a `zoomFactor`, and `WorldVector` converts positions between world units and canvas pixels.
+
+### Touch screens
+
+Each touch of the canvas is dispatched as `touchStart`, `touchMove` and `touchEnd`, with its `id` and its `position` in canvas pixels, from the top layer down. The touches neither scroll nor zoom the page. A touch no layer consumes when it starts becomes a gesture:
+
+- a single finger acts as the mouse: `mouseEnter`, `mouseMove` and `mouseDown` with the main button when it starts, `mouseMove` as it moves, `mouseUp` and `mouseOut` when lifted;
+- two fingers pinch: `pinchStart`, `pinchMove` and `pinchEnd`, with the `center` between them in canvas pixels and their distance as a `scale` of the one at the start, e.g. to drag and zoom a world. A second finger ends the mouse press of the first one.
+
+```ts
+this.subscribe("pinchMove", (e) => console.log(e.detail.center, e.detail.scale));
+```
+
+The UI takes the touches starting over its elements (see below), so that tapping a button never moves the mouse of the game.
 
 ### User interface
 
@@ -219,6 +235,7 @@ this.uiRenderer.setUI(
 - Buttons take a `borderRadius` (0 for square corners), a `borderWidth`, a `fontSize` and a `textColor` (the border `color` by default); containers and inputs take a `borderWidth` too.
 - A column container with `overflow: 'auto'` (scrollbar when needed) or `'scroll'` (always) scrolls its children vertically, with the mouse wheel or by dragging its scrollbar; it dispatches `scroll`, and `scrollTop` sets its scroll position from the styles.
 - `pointerEvents: 'none'` lets the mouse go through an element (not through its children), e.g. a transparent container laying out buttons over the game.
+- Each element dispatches `press` when the mouse or a first finger presses it, and `release` when the last one leaves it; a tap (a touch released over the element it started on) dispatches `click`. Several fingers press several elements at once, and a finger slides from an element to the next one, e.g. for on-screen controls: `{ "button.jump": { events: { press: () => Keyboard.press("jump"), release: () => Keyboard.release("jump") } } }`. A pressed button looks active. A finger on an element following the pointer drags it instead of sliding, e.g. the thumb of a scrollbar (swiping the content of a container does not scroll it).
 - Numeric properties can be animated: `element.animate('x', '20%', { duration: 400 })`.
 - Custom elements are registered with `UIElementFactory.registerElement('type', ElementClass)`.
 

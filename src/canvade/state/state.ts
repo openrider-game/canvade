@@ -3,8 +3,11 @@ import { GameEvent } from '../event/event-factory';
 import {
     DOMEvents,
     GameClipboardEvent,
+    GameControlEvent,
     GameKeyboardEvent,
     GameMouseEvent,
+    GamePinchEvent,
+    GameTouchEvent,
     GameWheelEvent,
 } from '../event/types/dom-events';
 import { GameLoopEvents, GameRenderEvent, GameUpdateEvent } from '../event/types/game-loop-events';
@@ -62,6 +65,12 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
         this.subscribe('mouseEnter', this.onMouseEnter);
         this.subscribe('mouseOut', this.onMouseOut);
         this.subscribe('contextMenu', this.onContextMenu);
+        this.subscribe('touchStart', this.onTouchStart);
+        this.subscribe('touchMove', this.onTouchMove);
+        this.subscribe('touchEnd', this.onTouchEnd);
+        this.subscribe('pinchStart', this.onPinchStart);
+        this.subscribe('pinchMove', this.onPinchMove);
+        this.subscribe('pinchEnd', this.onPinchEnd);
         this.subscribe('visibilityChange', this.onVisibilityChange);
         this.subscribe('keyDown', this.onKeyDown);
         this.subscribe('keyUp', this.onKeyUp);
@@ -154,6 +163,30 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
         this.dispatchInputToLayers(e, (layer) => layer.dispatch('contextMenu', e));
     }
 
+    protected onTouchStart(e: CustomEvent<GameTouchEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('touchStart', e));
+    }
+
+    protected onTouchMove(e: CustomEvent<GameTouchEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('touchMove', e));
+    }
+
+    protected onTouchEnd(e: CustomEvent<GameTouchEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('touchEnd', e));
+    }
+
+    protected onPinchStart(e: CustomEvent<GamePinchEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('pinchStart', e));
+    }
+
+    protected onPinchMove(e: CustomEvent<GamePinchEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('pinchMove', e));
+    }
+
+    protected onPinchEnd(e: CustomEvent<GamePinchEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('pinchEnd', e));
+    }
+
     protected onVisibilityChange(): void {
         this.layerStack.forEach((layer) => layer.dispatch('visibilityChange'));
     }
@@ -166,11 +199,11 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
         this.dispatchInputToLayers(e, (layer) => layer.dispatch('keyUp', e));
     }
 
-    protected onKeyboardDown(e: CustomEvent<GameKeyboardEvent>): void {
+    protected onKeyboardDown(e: CustomEvent<GameControlEvent>): void {
         this.dispatchInputToLayers(e, (layer) => layer.dispatch('keyboardDown', e));
     }
 
-    protected onKeyboardUp(e: CustomEvent<GameKeyboardEvent>): void {
+    protected onKeyboardUp(e: CustomEvent<GameControlEvent>): void {
         this.dispatchInputToLayers(e, (layer) => layer.dispatch('keyboardUp', e));
     }
 

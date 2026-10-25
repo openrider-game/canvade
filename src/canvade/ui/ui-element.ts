@@ -1,7 +1,7 @@
 import { Vector } from '../core/math/vector';
 import { EventEmitter } from '../event/event-emitter';
 import { EventFactory } from '../event/event-factory';
-import { GameClickEvent, UIEvents } from '../event/types/ui-events';
+import { GameClickEvent, GamePressEvent, UIEvents } from '../event/types/ui-events';
 import { UIAnimationOptions } from './animation/ui-animation';
 import { UIAnimationController, UIAnimationTarget } from './animation/ui-animation-controller';
 import { UIInteractionState, UIInteractionStateName } from './interaction/ui-interaction-state';
@@ -47,6 +47,8 @@ export type UIClickHandler = (x: number, y: number, target: UIElement) => void;
 export type UIValueHandler = (value: string, target: UIElement) => void;
 /** Callback of the `scroll` event of a container, receiving its scroll position in pixels. */
 export type UIScrollHandler = (scrollTop: number, target: UIElement) => void;
+/** Callback of the `press` and `release` events of an element. */
+export type UIPressHandler = (target: UIElement) => void;
 
 /**
  * Layout properties shared by all the UI elements.
@@ -107,6 +109,8 @@ export abstract class UIElement<
      */
     public isTreeRoot = false;
     private readonly interactionState = new UIInteractionState();
+    /** Number of pointers pressing the element: the mouse and the fingers on it. */
+    private pressCount = 0;
     private clickHandlerId: string | null = null;
     private readonly animationController: UIAnimationController<P>;
     private readonly propertyResolver: UIPropertyResolver<P>;
@@ -226,12 +230,16 @@ export abstract class UIElement<
      */
     public handleWheel?(deltaY: number): boolean;
 
-    /** Handles the main mouse button pressed over the element, at a position in UI pixels. */
-    public handlePointerDown?(x: number, y: number, mouseEvent: MouseEvent): void;
+    /**
+     * Handles the main mouse button, or a touch, pressed over the element, at a position in UI
+     * pixels.
+     */
+    public handlePointerDown?(x: number, y: number, inputEvent: MouseEvent | TouchEvent): void;
 
     /**
-     * Handles the mouse moving while the element is pressed, wherever the mouse is, e.g. to drag
-     * a scrollbar thumb or to select text.
+     * Handles the mouse, or the touch, moving while the element is pressed, wherever it is, e.g.
+     * to drag a scrollbar thumb or to select text. A touch pressing an element handling it drags
+     * the element instead of sliding to the other elements.
      */
     public handlePointerDrag?(x: number, y: number): void;
 
@@ -292,6 +300,33 @@ export abstract class UIElement<
         return this.interactionState.isActive();
     }
 
+    /** Returns whether a pointer presses the element: the mouse, or a finger on it. */
+    public isPressed(): boolean {
+        return this.pressCount > 0;
+    }
+
+    /**
+     * Counts a pointer pressing the element, dispatching `press` for the first one. Called by the
+     * UI manager, for the mouse and for each finger.
+     */
+    public press(): void {
+        this.pressCount++;
+        if (this.pressCount === 1) {
+            this.dispatchPress('press');
+        }
+    }
+
+    /** Counts a pointer leaving the element, dispatching `release` for the last one. */
+    public release(): void {
+        if (this.pressCount === 0) {
+            return;
+        }
+        this.pressCount--;
+        if (this.pressCount === 0) {
+            this.dispatchPress('release');
+        }
+    }
+
     /**
      * Dispatches `click` on the deepest element of this subtree at a canvas position.
      *
@@ -299,9 +334,9 @@ export abstract class UIElement<
      *
      * @returns Whether the position is inside this element.
      */
-    public handleClick(x: number, y: number, mouseEvent: MouseEvent): boolean {
+    public handleClick(x: number, y: number, inputEvent: MouseEvent | TouchEvent): boolean {
         return UIElementTree.handleClick(this, x, y, (target) =>
-            target.dispatchClick(x, y, mouseEvent),
+            target.dispatchClick(x, y, inputEvent),
         );
     }
 
@@ -430,16 +465,23 @@ export abstract class UIElement<
         return this.propertyResolver.resolveValue(property, endpoint, this.layoutParentBounds);
     }
 
-    private dispatchClick(x: number, y: number, mouseEvent: MouseEvent): void {
+    private dispatchClick(x: number, y: number, inputEvent: MouseEvent | TouchEvent): void {
         this.dispatch(
             'click',
             EventFactory.createGameEvent<GameClickEvent>({
                 name: 'click',
                 consumed: false,
-                mouseEvent,
+                inputEvent,
                 position: new Vector(x, y),
                 target: this,
             }),
+        );
+    }
+
+    private dispatchPress(name: 'press' | 'release'): void {
+        this.dispatch(
+            name,
+            EventFactory.createGameEvent<GamePressEvent>({ name, consumed: false, target: this }),
         );
     }
 }
