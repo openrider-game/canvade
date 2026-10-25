@@ -28,9 +28,19 @@ export abstract class Keyboard {
     /** Fire-once controls already reported by `isDown` during the current key press. */
     private static firedOnce: Map<string, boolean> = new Map<string, boolean>();
 
-    /** Registers a control under a name, replacing the control previously registered with it. */
+    /**
+     * Registers a control under a name, replacing the control previously registered with it,
+     * e.g. to bind it to another key: a control held down is released first, its key being
+     * replaced.
+     */
     public static registerControl(name: string, control: Control): void {
+        Keyboard.release(name);
         Keyboard.controls.set(name, control);
+    }
+
+    /** Control registered under a name, undefined without one. */
+    public static getControl(name: string): Control | undefined {
+        return Keyboard.controls.get(name);
     }
 
     /**

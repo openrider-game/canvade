@@ -182,6 +182,8 @@ this.subscribe("keyboardDown", (e) => console.log(e.detail.key));
 
 Letter controls match the letter typed with the keyboard layout of the player (`KEYZ` is the Z key of an AZERTY keyboard too), other controls match the physical key position.
 
+A control can be bound to another key at any time by registering it again, a held control being released first. `Keyboard.getControl(name)` gives the registered control; `control.label` reads it (`Shift+A`, `Up`), `Control.fromKeyboardEvent(e)` makes one from a key pressed with its modifiers (null for a modifier alone), e.g. to bind a control to the next key, `control.overlaps(other)` tells whether a same key triggers both, and `control.toJSON()` and `Control.fromJSON(data)` save and read it.
+
 A control can be held down without its key, e.g. by an on-screen button: `Keyboard.press("jump")` and `Keyboard.release("jump")` dispatch `keyboardDown` and `keyboardUp` as the key would, their `keyboardEvent` being `null`.
 
 `Mouse.mousePos` holds the mouse position in canvas pixels. When the current state has a world (`state.setWorld(world)`), `Mouse.worldPos` holds it in world units: a `World` has a `camera` and a `zoomFactor`, and `WorldVector` converts positions between world units and canvas pixels.
