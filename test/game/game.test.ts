@@ -9,6 +9,7 @@ import { createCanvasMock } from '../helpers/canvas';
 afterEach(() => {
     Display.pixelRatio = 1;
     Display.fixedUIScale = null;
+    Display.backgroundColor = '#fff';
     DebugUtils.setDebugLevel(DebugLevel.NONE);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -24,12 +25,21 @@ describe('Game initialization', () => {
         expect(context.lineCap).toBe('round');
         expect(context.lineJoin).toBe('round');
         expect(context.font).toBe('bold 15px monospace');
+        // Opaque, filled with white before each frame
+        expect(canvas.getContext).toHaveBeenCalledWith('2d', { alpha: false });
+        expect(Display.backgroundColor).toBe('#fff');
         expect(windowMock.addEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
         expect(host.addEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
         expect(game.frameDuration).toBeCloseTo(1000 / 30);
         // The UI follows the pixel ratio by default
         expect(Display.pixelRatio).toBe(2);
         expect(Display.uiScale).toBe(2);
+    });
+
+    test('can change the background color', () => {
+        createGame(1, [1000], { backgroundColor: '#123' });
+
+        expect(Display.backgroundColor).toBe('#123');
     });
 
     test('can fix the scale of the UI', () => {

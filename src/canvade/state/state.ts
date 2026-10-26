@@ -1,3 +1,4 @@
+import { Display } from '../core/display';
 import { EventEmitter } from '../event/event-emitter';
 import { GameEvent } from '../event/event-factory';
 import {
@@ -229,7 +230,7 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
 
     private onRender(e: CustomEvent<GameRenderEvent>): void {
         const ctx = e.detail.ctx;
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        Display.clear(ctx);
 
         this.layerStack.forEach((layer) => layer.dispatch('render', e));
     }

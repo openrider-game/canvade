@@ -16,7 +16,7 @@
     Canvade is an engine for canvas based browser games.
     <br />
     <br />
-    <a href="https://tomiy.online/openrider/">View Demo</a>
+    <a href="https://openrider.tomiy.online/">View Demo</a>
     ·
     <a href="https://github.com/tomiy/canvade/issues">Report Bug</a>
     ·
@@ -145,7 +145,9 @@ The game loop dispatches these events to the current state and its layers:
 
 - `fixedUpdate`, a fixed number of times per second (`updatesPerSecond`), for the physics
 - `update`, once per frame, with the `progress` towards the next fixed update and the elapsed `delta` in milliseconds, to interpolate the rendering between two fixed updates
-- `render`, once per frame, with the canvas context, after the canvas has been cleared
+- `render`, once per frame, with the canvas context, after the canvas has been filled with the background color
+
+The canvas is opaque (its context has no alpha channel, which spares the browser blending it with the page): each frame starts by filling it with `Display.backgroundColor`, white by default, rather than clearing it. Pass a `backgroundColor` to the game options to change it.
 
 States also receive `enter` and `leave` when pushed or popped, and the DOM events of the canvas (`mouseDown`, `mouseUp`, `mouseMove`, `scroll`, `contextMenu`, `touchStart`, `pinchMove`, `keyDown`, `keyboardDown`...): the game listens to the DOM, the states and layers subscribe to its events.
 Input events go from the top layer down, and stop as soon as a layer sets `event.detail.consumed`.

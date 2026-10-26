@@ -69,7 +69,8 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
      * Creates a manager, optionally with an initial UI tree.
      *
      * @param rootNode - Root of the UI tree, usually set later with {@link UIManager.setUI}.
-     * @param clearBeforeRender - Whether to clear the whole canvas before rendering the tree.
+     * @param clearBeforeRender - Whether to fill the whole canvas with the background color (see
+     * {@link Display.clear}) before rendering the tree.
      */
     constructor(
         private rootNode?: UIElement,
@@ -136,7 +137,7 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         }
 
         if (this.clearBeforeRender) {
-            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            Display.clear(ctx);
         }
 
         const scale = Display.uiScale;

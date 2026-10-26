@@ -39,6 +39,7 @@ export function createCanvasMock(
         restore: vi.fn(),
         save: vi.fn(),
         scale: vi.fn(),
+        setTransform: vi.fn(),
         stroke: vi.fn(),
         strokeRect: vi.fn(),
         strokeStyle: '',

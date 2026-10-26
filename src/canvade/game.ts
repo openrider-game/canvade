@@ -25,6 +25,8 @@ export type GameOptions = {
      * ratio of the screen (see {@link Display}).
      */
     uiScale?: number;
+    /** Color the canvas is filled with before each frame, white by default (see {@link Display}). */
+    backgroundColor?: string;
 };
 
 const defaultOptions = {
@@ -35,8 +37,8 @@ const defaultOptions = {
 /**
  * Entry point of a canvade game: owns the canvas, bridges the DOM events and runs the game loop.
  *
- * The constructor creates a canvas filling the host element, sized in device pixels and resized
- * with the window. Register the states with {@link Game.addStates}, push the first one with
+ * The constructor creates an opaque canvas filling the host element, sized in device pixels and
+ * resized with the window. Register the states with {@link Game.addStates}, push the first one with
  * {@link Game.pushState}, then start the loop with {@link Game.run}.
  *
  * Each frame of the loop, the current state of the {@link StateManager} receives:
@@ -74,7 +76,8 @@ export class Game {
         }
 
         const canvas = document.createElement(CANVAS_ELEMENT);
-        const ctx = canvas.getContext(CANVAS_CONTEXT_TYPE);
+        // Opaque: the browser composites the canvas faster without blending it with the page
+        const ctx = canvas.getContext(CANVAS_CONTEXT_TYPE, { alpha: false });
 
         if (!ctx) {
             throw new Error('Cannot retrieve canvas context');
@@ -91,6 +94,7 @@ export class Game {
 
         const mergedOptions = { ...defaultOptions, ...options };
         Display.fixedUIScale = mergedOptions.uiScale ?? null;
+        Display.backgroundColor = mergedOptions.backgroundColor ?? Display.backgroundColor;
 
         this.lastTime = performance.now();
         this.frameDuration = 1000 / mergedOptions.updatesPerSecond;

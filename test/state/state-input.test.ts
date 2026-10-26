@@ -107,12 +107,14 @@ describe('State input dispatch', () => {
         expect(top.received).toEqual(expected);
     });
 
-    test('clears the canvas, then renders the layers from the bottom up', () => {
+    test('fills the canvas with the background color, then renders the layers from the bottom up', () => {
         const { context } = createCanvasMock();
         const order: string[] = [];
         const bottom = new RecordingLayer();
         const top = new RecordingLayer();
-        vi.mocked(context.clearRect).mockImplementation(() => order.push('clear'));
+        vi.mocked(context.fillRect).mockImplementation(() =>
+            order.push(`fill ${context.fillStyle}`),
+        );
         bottom.subscribe('render', () => order.push('bottom'));
         top.subscribe('render', () => order.push('top'));
         const update = vi.fn();
@@ -133,7 +135,7 @@ describe('State input dispatch', () => {
             EventFactory.createGameEvent({ name: 'render', consumed: false, ctx: context }),
         );
 
-        expect(order).toEqual(['clear', 'bottom', 'top']);
+        expect(order).toEqual(['fill #fff', 'bottom', 'top']);
         expect(update.mock.calls[0][0].detail).toMatchObject({ progress: 0.5, delta: 16 });
     });
 

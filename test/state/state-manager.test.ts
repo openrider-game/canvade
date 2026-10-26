@@ -69,7 +69,7 @@ describe('StateManager', () => {
             delta: 16,
         });
         expect(renderListener).toHaveBeenCalledOnce();
-        expect(context.clearRect).toHaveBeenCalledOnce();
+        expect(context.fillRect).toHaveBeenCalledExactlyOnceWith(0, 0, 320, 180);
 
         manager.pop();
         manager.update(1, 32);
@@ -101,5 +101,11 @@ describe('StateManager', () => {
 
 function createRenderContext(): CanvasRenderingContext2D {
     const canvas = { width: 320, height: 180 } as HTMLCanvasElement;
-    return { canvas, clearRect: vi.fn() } as unknown as CanvasRenderingContext2D;
+    return {
+        canvas,
+        fillRect: vi.fn(),
+        restore: vi.fn(),
+        save: vi.fn(),
+        setTransform: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
 }
