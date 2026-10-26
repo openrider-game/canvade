@@ -4,14 +4,8 @@ import { WorldVector } from '../world/world-vector';
 import { EventFactory } from './event-factory';
 import { Keyboard, KeyboardEventPayload } from './keyboard/keyboard';
 import { Mouse } from './mouse/mouse';
-import { TouchGestures, TouchPoint } from './touch/touch-gestures';
-import {
-    GameClipboardEvent,
-    GameControlEvent,
-    GameKeyboardEvent,
-    GamePinchEvent,
-    GameTouchEvent,
-} from './types/dom-events';
+import { TouchBridge, toCanvasPosition } from './touch/touch-bridge';
+import { GameClipboardEvent, GameControlEvent, GameKeyboardEvent } from './types/dom-events';
 import {
     CONTEXT_MENU_EVENT,
     COPY_EVENT,
@@ -25,12 +19,7 @@ import {
     MOUSE_MOVE_EVENT,
     MOUSE_OUT_EVENT,
     MOUSE_UP_EVENT,
-    MOUSE_MAIN_BUTTON,
     PASTE_EVENT,
-    TOUCH_CANCEL_EVENT,
-    TOUCH_END_EVENT,
-    TOUCH_MOVE_EVENT,
-    TOUCH_START_EVENT,
     VISIBILITY_CHANGE_EVENT,
     WHEEL_EVENT,
 } from './event.constants';
@@ -42,22 +31,17 @@ import {
  * world position when the current state has a `World`. Key events are forwarded only while
  * the canvas has the focus, and also feed {@link Keyboard}.
  *
- * Each touch of the canvas is dispatched as `touchStart`, `touchMove` and `touchEnd`; the
- * touches no layer consumes when they start become gestures (see {@link TouchGestures}): a single
+ * Each touch of the canvas is dispatched as `touchStart`, `touchMove` and `touchEnd` by a
+ * {@link TouchBridge}; the touches no layer consumes when they start become gestures: a single
  * finger dispatches the mouse events of the main button, two fingers the pinch events. The
  * touches neither scroll nor zoom the page, and the browser does not turn them into mouse events.
  */
 export class EventManager {
-    /** Gestures of the touches no layer took. */
-    private readonly gestures: TouchGestures;
-    /** State manager receiving the gestures, set when the DOM events are bridged. */
-    private gestureTarget: StateManager | null = null;
+    /** Bridge of the touches, acting as the mouse through the mouse handlers. */
+    private readonly touch: TouchBridge;
 
     constructor(private ctx: CanvasRenderingContext2D) {
-        this.gestures = new TouchGestures({
-            mouse: (type, point, event) => this.emulateMouse(type, point, event),
-            pinch: (name, center, scale) => this.dispatchPinch(name, center, scale),
-        });
+        this.touch = new TouchBridge(ctx.canvas, this);
     }
 
     /**
@@ -87,26 +71,7 @@ export class EventManager {
             this.onContextMenu(e, stateManager),
         );
 
-        // Not passive: their default actions, scrolling and zooming the page, are prevented
-        this.gestureTarget = stateManager;
-        const touchOptions = { passive: false };
-        this.ctx.canvas.addEventListener(
-            TOUCH_START_EVENT,
-            (e) => this.onTouchStart(e, stateManager),
-            touchOptions,
-        );
-        this.ctx.canvas.addEventListener(
-            TOUCH_MOVE_EVENT,
-            (e) => this.onTouchMove(e, stateManager),
-            touchOptions,
-        );
-        for (const name of [TOUCH_END_EVENT, TOUCH_CANCEL_EVENT]) {
-            this.ctx.canvas.addEventListener(
-                name,
-                (e) => this.onTouchEnd(e as TouchEvent, stateManager),
-                touchOptions,
-            );
-        }
+        this.touch.listen(stateManager);
 
         document.addEventListener(VISIBILITY_CHANGE_EVENT, () =>
             this.onVisibilityChange(stateManager),
@@ -188,38 +153,19 @@ export class EventManager {
         return true;
     }
 
-    /**
-     * Focuses the canvas, then dispatches `touchStart` for each new touch, the ones no layer
-     * consumes starting a gesture.
-     */
+    /** Dispatches `touchStart` for each new touch (see {@link TouchBridge.onTouchStart}). */
     public onTouchStart(e: TouchEvent, stateManager: StateManager): void {
-        e.preventDefault();
-        this.ctx.canvas.focus();
-        this.gestureTarget = stateManager;
-
-        for (const touch of Array.from(e.changedTouches)) {
-            if (!this.dispatchTouch('touchStart', e, touch, stateManager)) {
-                this.gestures.start(touch.identifier, touch, e);
-            }
-        }
+        this.touch.onTouchStart(e, stateManager);
     }
 
-    /** Dispatches `touchMove` for each moving touch, then follows the gesture. */
+    /** Dispatches `touchMove` for each moving touch (see {@link TouchBridge.onTouchMove}). */
     public onTouchMove(e: TouchEvent, stateManager: StateManager): void {
-        e.preventDefault();
-        for (const touch of Array.from(e.changedTouches)) {
-            this.dispatchTouch('touchMove', e, touch, stateManager);
-            this.gestures.move(touch.identifier, touch, e);
-        }
+        this.touch.onTouchMove(e, stateManager);
     }
 
-    /** Dispatches `touchEnd` for each touch ending or cancelled, then follows the gesture. */
+    /** Dispatches `touchEnd` for each touch ending (see {@link TouchBridge.onTouchEnd}). */
     public onTouchEnd(e: TouchEvent, stateManager: StateManager): void {
-        e.preventDefault();
-        for (const touch of Array.from(e.changedTouches)) {
-            this.dispatchTouch('touchEnd', e, touch, stateManager);
-            this.gestures.end(touch.identifier, touch, e);
-        }
+        this.touch.onTouchEnd(e, stateManager);
     }
 
     public onVisibilityChange(stateManager: StateManager): void {
@@ -289,84 +235,6 @@ export class EventManager {
     /** Whether a key event is a copy, cut or paste shortcut (Ctrl or Meta with C, X or V). */
     private static isClipboardShortcut(e: KeyboardEvent): boolean {
         return (e.ctrlKey || e.metaKey) && ['c', 'x', 'v'].includes(e.key?.toLowerCase());
-    }
-
-    /**
-     * Dispatches a touch event to the current state.
-     *
-     * @returns Whether a layer consumed it.
-     */
-    private dispatchTouch(
-        name: 'touchStart' | 'touchMove' | 'touchEnd',
-        touchEvent: TouchEvent,
-        touch: Touch,
-        stateManager: StateManager,
-    ): boolean {
-        const gameTouchEvent = EventFactory.createGameEvent<GameTouchEvent>({
-            name,
-            consumed: false,
-            touchEvent,
-            id: touch.identifier,
-            position: this.toCanvasPosition(touch),
-        });
-        stateManager.getCurrent()?.dispatch(name, gameTouchEvent);
-        return gameTouchEvent.detail.consumed;
-    }
-
-    /**
-     * Acts as the mouse for a finger: entering the canvas and hovering before pressing, and
-     * leaving it after releasing, as no pointer stays over the canvas.
-     */
-    private emulateMouse(
-        type: 'mousedown' | 'mousemove' | 'mouseup',
-        point: TouchPoint,
-        touchEvent: TouchEvent,
-    ): void {
-        const stateManager = this.gestureTarget;
-        if (!stateManager) {
-            return;
-        }
-
-        const { shiftKey, ctrlKey, altKey, metaKey } = touchEvent;
-        const mouseEvent = (name: string, buttons: number) =>
-            new MouseEvent(name, {
-                clientX: point.clientX,
-                clientY: point.clientY,
-                button: MOUSE_MAIN_BUTTON,
-                buttons,
-                shiftKey,
-                ctrlKey,
-                altKey,
-                metaKey,
-            });
-
-        if (type === 'mousedown') {
-            this.onMouseEnter(mouseEvent(MOUSE_ENTER_EVENT, 0), stateManager);
-            this.onMouseMove(mouseEvent(MOUSE_MOVE_EVENT, 0), stateManager);
-            this.onMouseDown(mouseEvent(MOUSE_DOWN_EVENT, 1), stateManager);
-        } else if (type === 'mousemove') {
-            this.onMouseMove(mouseEvent(MOUSE_MOVE_EVENT, 1), stateManager);
-        } else {
-            this.onMouseUp(mouseEvent(MOUSE_UP_EVENT, 0), stateManager);
-            this.onMouseOut(mouseEvent(MOUSE_OUT_EVENT, 0), stateManager);
-        }
-    }
-
-    /** Dispatches a pinch event to the current state, its center in canvas pixels. */
-    private dispatchPinch(
-        name: 'pinchStart' | 'pinchMove' | 'pinchEnd',
-        center: TouchPoint,
-        scale: number,
-    ): void {
-        this.gestureTarget?.getCurrent()?.dispatch(
-            name,
-            EventFactory.createGameEvent<GamePinchEvent>({
-                name,
-                consumed: false,
-                center: this.toCanvasPosition(center),
-                scale,
-            }),
-        );
     }
 
     /** Dispatches `keyboardDown` when {@link Keyboard} reports a pressed control. */
@@ -442,7 +310,7 @@ export class EventManager {
      * @returns A copy of the position in canvas pixels.
      */
     private setMousePos(e: MouseEvent, stateManager: StateManager): Vector {
-        Mouse.mousePos.set(this.toCanvasPosition(e));
+        Mouse.mousePos.set(toCanvasPosition(this.ctx.canvas, e));
 
         const world = stateManager.getCurrent()?.getWorld();
         if (world) {
@@ -457,17 +325,5 @@ export class EventManager {
         }
 
         return Mouse.mousePos.clone();
-    }
-
-    /** Converts a position on the page, in CSS pixels, to canvas pixels. */
-    private toCanvasPosition({ clientX, clientY }: TouchPoint): Vector {
-        // The canvas is sized in device pixels and may be scaled by CSS, convert from CSS pixels
-        const canvasRect = this.ctx.canvas.getBoundingClientRect();
-        const scaleX = canvasRect.width === 0 ? 0 : this.ctx.canvas.width / canvasRect.width;
-        const scaleY = canvasRect.height === 0 ? 0 : this.ctx.canvas.height / canvasRect.height;
-        return new Vector(
-            (clientX - canvasRect.left) * scaleX,
-            (clientY - canvasRect.top) * scaleY,
-        );
     }
 }
