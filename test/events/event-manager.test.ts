@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { Vector } from '../../src/canvade/core/math/vector';
 import { EventManager } from '../../src/canvade/event/event-manager';
+import { Control } from '../../src/canvade/event/keyboard/control';
+import { Keyboard } from '../../src/canvade/event/keyboard/keyboard';
 import { Mouse } from '../../src/canvade/event/mouse/mouse';
 import { World } from '../../src/canvade/world/world';
 import { createCanvasMock } from '../helpers/canvas';
@@ -98,6 +100,7 @@ describe('EventManager mouse world positions', () => {
         const stateManager = { getCurrent: () => ({ dispatch }) };
         const eventManager = new EventManager(context);
         const keyboardEvent = {} as KeyboardEvent;
+        vi.stubGlobal('document', { visibilityState: 'visible' });
         const controlEvent = new CustomEvent('keyboarddown', {
             detail: { keyboardEvent, key: 'jump' },
         });
@@ -128,7 +131,9 @@ describe('EventManager DOM bridge', () => {
             getCurrent: () => ({ getWorld: () => undefined, dispatch }),
         };
         const documentAddEventListener = vi.fn();
+        const windowAddEventListener = vi.fn();
         vi.stubGlobal('document', { addEventListener: documentAddEventListener });
+        vi.stubGlobal('window', { addEventListener: windowAddEventListener });
 
         new EventManager(context).bridgeDOMEvents(stateManager as never);
 
@@ -141,6 +146,10 @@ describe('EventManager DOM bridge', () => {
             expect.any(Function),
         );
         expect(documentAddEventListener).toHaveBeenCalledWith('keydown', expect.any(Function));
+        // The focus loss, and the buttons released out of the canvas
+        expect(canvas.addEventListener).toHaveBeenCalledWith('blur', expect.any(Function));
+        expect(windowAddEventListener).toHaveBeenCalledWith('blur', expect.any(Function));
+        expect(windowAddEventListener).toHaveBeenCalledWith('mouseup', expect.any(Function));
 
         const wheelEvent = { preventDefault: vi.fn() } as unknown as WheelEvent;
         expect(new EventManager(context).onScroll(wheelEvent, stateManager as never)).toBe(true);
@@ -184,5 +193,97 @@ describe('EventManager DOM bridge', () => {
 
         expect(dispatch).not.toHaveBeenCalled();
         expect(unfocusedEvent.preventDefault).not.toHaveBeenCalled();
+    });
+});
+
+describe('EventManager held inputs', () => {
+    /** Mouse event double, as the DOM one, missing from the environment of the tests. */
+    class MouseEventDouble {
+        public readonly preventDefault = vi.fn();
+        public constructor(
+            public readonly type: string,
+            init: MouseEventInit = {},
+        ) {
+            Object.assign(this, { button: 0, clientX: 0, clientY: 0, ...init });
+        }
+    }
+
+    /** A bridged event manager, its listeners by target and event name. */
+    function bridge() {
+        const { canvas, context } = createCanvasMock();
+        const listeners = new Map<string, (e: unknown) => void>();
+        const listen = (target: string) =>
+            vi.fn((name: string, listener: (e: unknown) => void) => {
+                listeners.set(`${target}:${name}`, listener);
+            });
+        canvas.addEventListener = listen('canvas') as never;
+        const dispatchEvent = vi.fn((e: CustomEvent) => listeners.get(`document:${e.type}`)?.(e));
+        vi.stubGlobal('document', {
+            addEventListener: listen('document'),
+            dispatchEvent,
+            activeElement: canvas,
+            visibilityState: 'visible',
+        });
+        vi.stubGlobal('window', { addEventListener: listen('window') });
+        vi.stubGlobal('MouseEvent', MouseEventDouble);
+
+        const dispatch = vi.fn();
+        const stateManager = { getCurrent: () => ({ getWorld: () => undefined, dispatch }) };
+        const eventManager = new EventManager(context);
+        eventManager.bridgeDOMEvents(stateManager as never);
+        const fire = (key: string, e: unknown) => listeners.get(key)?.(e);
+        const names = () => dispatch.mock.calls.map(([name]) => name);
+        return { canvas, eventManager, stateManager, dispatch, fire, names };
+    }
+
+    test('releases the controls and the mouse buttons held when the canvas loses the focus', () => {
+        const { canvas, dispatch, fire, names } = bridge();
+        Keyboard.registerControl('held-test', new Control('ArrowUp'));
+        const key = { code: 'ArrowUp', key: 'ArrowUp', preventDefault: vi.fn() };
+        fire('document:keydown', key);
+        fire('canvas:mousedown', new MouseEventDouble('mousedown', { button: 2, clientX: 40 }));
+        expect(Keyboard.isDown('held-test')).toBe(true);
+        dispatch.mockClear();
+
+        fire('canvas:blur', {});
+
+        expect(Keyboard.isDown('held-test')).toBe(false);
+        expect(names()).toEqual(['keyboardUp', 'mouseUp']);
+        // At the last position of the mouse, with the button held
+        const mouseUp = dispatch.mock.calls[1][1].detail.mouseEvent;
+        expect([mouseUp.button, mouseUp.clientX]).toEqual([2, 40]);
+
+        // Nothing is held anymore: the window losing the focus next releases nothing
+        dispatch.mockClear();
+        fire('window:blur', {});
+        expect(dispatch).not.toHaveBeenCalled();
+        expect(canvas.focus).toHaveBeenCalled();
+    });
+
+    test('releases the inputs held when the page is hidden, before telling the states', () => {
+        const { dispatch, fire, names } = bridge();
+        fire('canvas:mousedown', new MouseEventDouble('mousedown'));
+        dispatch.mockClear();
+        (document as { visibilityState: string }).visibilityState = 'hidden';
+
+        fire('document:visibilitychange', {});
+
+        expect(names()).toEqual(['mouseUp', 'visibilityChange']);
+    });
+
+    test('releases a mouse button pressed on the canvas wherever it is released', () => {
+        const { canvas, dispatch, fire, names } = bridge();
+        fire('canvas:mousedown', new MouseEventDouble('mousedown'));
+        dispatch.mockClear();
+
+        // Released over the page: once, the canvas listener not seeing it
+        fire('window:mouseup', { ...new MouseEventDouble('mouseup'), target: {} });
+        // A button released over the page without being pressed on the canvas is not
+        fire('window:mouseup', { ...new MouseEventDouble('mouseup', { button: 1 }), target: {} });
+        // Released over the canvas: seen by its own listener, not twice
+        fire('canvas:mousedown', new MouseEventDouble('mousedown'));
+        fire('window:mouseup', { ...new MouseEventDouble('mouseup'), target: canvas });
+
+        expect(names()).toEqual(['mouseUp', 'mouseDown']);
     });
 });

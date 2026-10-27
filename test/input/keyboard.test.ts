@@ -26,6 +26,27 @@ describe('Keyboard controls', () => {
         expect(dispatchEvent).toHaveBeenCalledTimes(2);
     });
 
+    test('releases every control held at once, e.g. when the canvas loses the focus', () => {
+        const dispatchEvent = vi.fn();
+        vi.stubGlobal('document', { dispatchEvent });
+        Keyboard.registerControl('left-test', new Control('ArrowLeft'));
+        Keyboard.registerControl('right-test', new Control('ArrowRight'));
+        Keyboard.onKeyDown(createKeyboardEvent('ArrowLeft'));
+        Keyboard.press('right-test');
+        dispatchEvent.mockClear();
+
+        Keyboard.releaseAll();
+
+        expect(Keyboard.isDown('left-test') || Keyboard.isDown('right-test')).toBe(false);
+        const released = dispatchEvent.mock.calls.map(([e]) => [e.type, e.detail.key]);
+        expect(released).toEqual([
+            ['keyboardup', 'left-test'],
+            ['keyboardup', 'right-test'],
+        ]);
+        Keyboard.releaseAll();
+        expect(dispatchEvent).toHaveBeenCalledTimes(2);
+    });
+
     test('matches modifiers and supports fire-once controls', () => {
         const dispatchEvent = vi.fn();
         vi.stubGlobal('document', { dispatchEvent });

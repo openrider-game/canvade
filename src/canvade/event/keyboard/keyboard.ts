@@ -84,6 +84,18 @@ export abstract class Keyboard {
         Keyboard.dispatchControl(KEYBOARD_UP_EVENT, null, name);
     }
 
+    /**
+     * Releases every control held down, dispatching {@link KEYBOARD_UP_EVENT} for each one, e.g.
+     * when the canvas loses the focus: their keys could be released elsewhere, unseen.
+     */
+    public static releaseAll(): void {
+        Keyboard.holding.forEach((holding, name) => {
+            if (holding) {
+                Keyboard.release(name);
+            }
+        });
+    }
+
     /** Dispatches the custom event of a control change on the document. */
     private static dispatchControl(
         type: typeof KEYBOARD_DOWN_EVENT | typeof KEYBOARD_UP_EVENT,

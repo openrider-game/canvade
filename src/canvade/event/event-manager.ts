@@ -14,6 +14,7 @@ import {
     KEY_UP_EVENT,
     KEYBOARD_DOWN_EVENT,
     KEYBOARD_UP_EVENT,
+    BLUR_EVENT,
     MOUSE_DOWN_EVENT,
     MOUSE_ENTER_EVENT,
     MOUSE_MOVE_EVENT,
@@ -31,6 +32,11 @@ import {
  * world position when the current state has a `World`. Key events are forwarded only while
  * the canvas has the focus, and also feed {@link Keyboard}.
  *
+ * The inputs held never stay stuck: a mouse button pressed on the canvas is released wherever
+ * it is released, and when the canvas loses the focus (another element or window focused, the
+ * page hidden, a dialog opened), every control and mouse button held is released, as their keys
+ * and buttons could then be released unseen.
+ *
  * Each touch of the canvas is dispatched as `touchStart`, `touchMove` and `touchEnd` by a
  * {@link TouchBridge}; the touches no layer consumes when they start become gestures: a single
  * finger dispatches the mouse events of the main button, two fingers the pinch events. The
@@ -39,6 +45,10 @@ import {
 export class EventManager {
     /** Bridge of the touches, acting as the mouse through the mouse handlers. */
     private readonly touch: TouchBridge;
+    /** Mouse buttons pressed on the canvas and not released yet, by `MouseEvent.button`. */
+    private readonly heldButtons = new Set<number>();
+    /** Last mouse event of the canvas, the position the held buttons are released at. */
+    private lastMouseEvent: MouseEvent | null = null;
 
     constructor(private ctx: CanvasRenderingContext2D) {
         this.touch = new TouchBridge(ctx.canvas, this);
@@ -57,6 +67,12 @@ export class EventManager {
             this.onMouseDown(e, stateManager),
         );
         this.ctx.canvas.addEventListener(MOUSE_UP_EVENT, (e) => this.onMouseUp(e, stateManager));
+        // A button pressed on the canvas, then released out of it
+        window.addEventListener(MOUSE_UP_EVENT, (e) => {
+            if (e.target !== this.ctx.canvas && this.heldButtons.has(e.button)) {
+                this.onMouseUp(e, stateManager);
+            }
+        });
         this.ctx.canvas.addEventListener(MOUSE_MOVE_EVENT, (e) =>
             this.onMouseMove(e, stateManager),
         );
@@ -76,6 +92,9 @@ export class EventManager {
         document.addEventListener(VISIBILITY_CHANGE_EVENT, () =>
             this.onVisibilityChange(stateManager),
         );
+        // The window losing the focus blurs the canvas too, but not in every browser
+        this.ctx.canvas.addEventListener(BLUR_EVENT, () => this.releaseInputs(stateManager));
+        window.addEventListener(BLUR_EVENT, () => this.releaseInputs(stateManager));
 
         document.addEventListener(KEY_DOWN_EVENT, (e) => this.onKeyDown(e, stateManager));
         for (const name of [COPY_EVENT, CUT_EVENT, PASTE_EVENT] as const) {
@@ -97,6 +116,7 @@ export class EventManager {
     public onMouseDown(e: MouseEvent, stateManager: StateManager): boolean {
         e.preventDefault();
         this.ctx.canvas.focus();
+        this.heldButtons.add(e.button);
 
         this.dispatchMouse('mouseDown', e, stateManager, (position) => {
             Mouse.lastClick.set(position);
@@ -108,6 +128,7 @@ export class EventManager {
     }
 
     public onMouseUp(e: MouseEvent, stateManager: StateManager): boolean {
+        this.heldButtons.delete(e.button);
         this.dispatchMouse('mouseUp', e, stateManager);
         return true;
     }
@@ -168,8 +189,33 @@ export class EventManager {
         this.touch.onTouchEnd(e, stateManager);
     }
 
+    /** Dispatches `visibilityChange`, releasing the inputs held first when the page is hidden. */
     public onVisibilityChange(stateManager: StateManager): void {
+        if (document.visibilityState === 'hidden') {
+            this.releaseInputs(stateManager);
+        }
         stateManager.getCurrent()?.dispatch('visibilityChange');
+    }
+
+    /**
+     * Releases every input held, as when the canvas loses the focus: each control held (see
+     * {@link Keyboard.releaseAll}), then each mouse button pressed on the canvas, dispatching
+     * `mouseUp` at the last mouse position.
+     */
+    public releaseInputs(stateManager: StateManager): void {
+        Keyboard.releaseAll();
+
+        const last = this.lastMouseEvent;
+        for (const button of [...this.heldButtons]) {
+            this.onMouseUp(
+                new MouseEvent(MOUSE_UP_EVENT, {
+                    button,
+                    clientX: last?.clientX ?? 0,
+                    clientY: last?.clientY ?? 0,
+                }),
+                stateManager,
+            );
+        }
     }
 
     /**
@@ -310,6 +356,7 @@ export class EventManager {
      * @returns A copy of the position in canvas pixels.
      */
     private setMousePos(e: MouseEvent, stateManager: StateManager): Vector {
+        this.lastMouseEvent = e;
         Mouse.mousePos.set(toCanvasPosition(this.ctx.canvas, e));
 
         const world = stateManager.getCurrent()?.getWorld();
