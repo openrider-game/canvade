@@ -223,7 +223,8 @@ export abstract class UIElement<
 
     /**
      * Handles the mouse wheel over the element or its children, implemented by the scrolling
-     * elements. Elements are asked from the deepest one under the mouse up to the root.
+     * elements. Elements are asked from the deepest one under the mouse up to the root. Also
+     * called for a finger dragging the element or its children vertically, see `UITouchTracker`.
      *
      * @param deltaY - Distance to scroll, in pixels, positive downwards.
      * @returns Whether the element scrolled, the wheel event being then consumed.

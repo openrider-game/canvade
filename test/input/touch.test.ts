@@ -289,6 +289,54 @@ describe('UI elements under the fingers', () => {
         ]);
     });
 
+    test('scroll a list dragged by its buttons, a short move still being a tap', () => {
+        const scrolls: number[] = [];
+        const rows: UIStructureDefinition = ['a', 'b', 'c', 'd'].map((name) => ({
+            [`button.row-${name}`]: {
+                events: {
+                    press: () => log.push(`press ${name}`),
+                    release: () => log.push(`release ${name}`),
+                    click: () => log.push(`click ${name}`),
+                },
+            },
+        }));
+        const list = layer.uiRenderer.setUI(
+            [
+                {
+                    'container.list': {
+                        children: rows,
+                        events: { scroll: (scrollTop) => scrolls.push(scrollTop) },
+                    },
+                },
+            ],
+            {
+                // Two rows of 40 pixels out of four
+                '.list': { x: 0, y: 0, width: 100, height: 80, overflow: 'auto' },
+                button: { width: '100%', height: 40 },
+            },
+        ).children[0];
+        const render = () => layer.uiRenderer.render(createCanvasMock(200, 100).context);
+        // The scrollbar shows from the second layout
+        render();
+        render();
+
+        // A tap moving less than the threshold
+        layer.dispatch('pointerDown', touchEvent('pointerDown', 1, 30, 20));
+        layer.dispatch('pointerMove', touchEvent('pointerMove', 1, 30, 15));
+        layer.dispatch('pointerUp', touchEvent('pointerUp', 1, 30, 15));
+        expect(log).toEqual(['press a', 'release a', 'click a']);
+
+        // Dragged up by 30 pixels, the content following the finger
+        log = [];
+        layer.dispatch('pointerDown', touchEvent('pointerDown', 2, 30, 50));
+        layer.dispatch('pointerMove', touchEvent('pointerMove', 2, 30, 40));
+        layer.dispatch('pointerMove', touchEvent('pointerMove', 2, 30, 20));
+        layer.dispatch('pointerUp', touchEvent('pointerUp', 2, 30, 20));
+        expect(scrolls).toEqual([10, 30]);
+        expect(list.v('scrollTop')).toBe(30);
+        expect(log).toEqual(['press b', 'release b']);
+    });
+
     test('press an element with the main mouse button too', () => {
         const mouse = (name: string) =>
             new CustomEvent<GamePointerEvent>(name, {

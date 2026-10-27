@@ -9,12 +9,22 @@ interface UITouch {
     current: UIElement | null;
     /** Last position of the touch, in UI pixels. */
     position: Vector;
+    /** Position the touch started at, in UI pixels. */
+    origin: Vector;
     /**
      * Whether the touch drags its element (see `UIElement.handlePointerDrag`) rather than
      * sliding.
      */
     drags: boolean;
+    /** Element the touch scrolls, once it moved along its scrolling direction. */
+    scrolls: UIElement | null;
 }
+
+/**
+ * Distance a touch moves vertically, in UI pixels, before it scrolls the element it started on,
+ * rather than pressing it: a shorter move is still a tap.
+ */
+const SCROLL_THRESHOLD = 8;
 
 /**
  * Tracks the fingers on the elements of a UI tree, used by the UI manager.
@@ -23,6 +33,10 @@ interface UITouch {
  * under it, sliding from an element to the next one, until it ends, clicking the element it
  * started on when released over it (a tap). A finger on an element following the pointer drags
  * it instead (see `UIElement.handlePointerDrag`). Several fingers press several elements at once.
+ *
+ * A finger moving vertically over a scrolling element, e.g. over the buttons of a scrolling list,
+ * scrolls it like the mouse wheel would (see `UIElement.handleWheel`), the content following the
+ * finger: it then releases its element without clicking it.
  *
  * The positions are in UI pixels.
  */
@@ -65,6 +79,8 @@ export class UITouchTracker {
             this.slide(touch, target);
             touch.start = target;
             touch.drags = target?.handlePointerDrag !== undefined;
+            touch.scrolls = null;
+            touch.origin = touch.position;
         }
     }
 
@@ -86,7 +102,9 @@ export class UITouchTracker {
             start: target,
             current: target,
             position,
+            origin: position,
             drags: target.handlePointerDrag !== undefined,
+            scrolls: null,
         });
         return true;
     }
@@ -103,13 +121,42 @@ export class UITouchTracker {
             return false;
         }
 
+        const previous = touch.position;
         const { x, y } = (touch.position = position);
-        if (touch.drags) {
+        if (touch.scrolls) {
+            // The content follows the finger
+            touch.scrolls.handleWheel?.(previous.y - y);
+        } else if (touch.drags) {
             touch.start?.handlePointerDrag?.(x, y);
-        } else {
+        } else if (!this.startScroll(touch)) {
             this.slide(touch, root.findElementAt(x, y));
         }
         return true;
+    }
+
+    /**
+     * Scrolls the first element scrolling from the element the touch started on up to the root,
+     * once the touch moved far enough, mostly vertically: the touch then scrolls it until it ends,
+     * releasing its element without clicking it.
+     *
+     * @returns Whether the touch scrolls an element.
+     */
+    private startScroll(touch: UITouch): boolean {
+        const dx = touch.position.x - touch.origin.x;
+        const dy = touch.position.y - touch.origin.y;
+        if (Math.abs(dy) < SCROLL_THRESHOLD || Math.abs(dy) < Math.abs(dx)) {
+            return false;
+        }
+
+        for (let element = touch.start; element; element = element.parent) {
+            if (element.handleWheel?.(-dy)) {
+                touch.scrolls = element;
+                touch.start = null;
+                this.slide(touch, null);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

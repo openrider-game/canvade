@@ -75,8 +75,8 @@ const defaultUIContainerProperties: UIContainerProperties = {
  * others.
  *
  * A column container with `overflow: 'scroll'` or `'auto'` scrolls its children vertically: the
- * mouse wheel scrolls them, and the scrollbar, on the right of the content box, can be dragged
- * or clicked. The children are then laid out beside the scrollbar. Each change of the scroll
+ * mouse wheel scrolls them, as well as a finger dragging them, and the scrollbar, on the right of
+ * the content box, can be dragged or clicked. The children are then laid out beside the scrollbar. Each change of the scroll
  * position dispatches `scroll`.
  */
 export class UIContainer extends UIElement<UIContainerProperties> {
