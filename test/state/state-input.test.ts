@@ -6,12 +6,12 @@ import { State } from '../../src/canvade/state/state';
 import { createCanvasMock } from '../helpers/canvas';
 
 const INPUT_EVENTS = [
-    'mouseDown',
-    'mouseUp',
-    'mouseMove',
+    'pointerDown',
+    'pointerUp',
+    'pointerMove',
     'scroll',
-    'mouseEnter',
-    'mouseOut',
+    'pointerEnter',
+    'pointerLeave',
     'contextMenu',
     'keyDown',
     'keyUp',
@@ -54,7 +54,8 @@ function inputEvent(name: string) {
         name,
         consumed: false,
         position: new Vector(),
-        mouseEvent: { button: 0 } as MouseEvent,
+        pointerEvent: { pointerId: 1, pointerType: 'mouse', button: 0 } as PointerEvent,
+        primary: true,
     });
 }
 
@@ -162,23 +163,24 @@ describe('Layer user interface', () => {
                 name,
                 consumed: false,
                 position: new Vector(x, y),
-                mouseEvent: { button: 0 } as MouseEvent,
+                pointerEvent: { pointerId: 1, pointerType: 'mouse', button: 0 } as PointerEvent,
+                primary: true,
             });
 
-        const down = at('mouseDown', 20, 20);
-        layer.dispatch('mouseDown', down);
-        const up = at('mouseUp', 20, 20);
-        layer.dispatch('mouseUp', up);
+        const down = at('pointerDown', 20, 20);
+        layer.dispatch('pointerDown', down);
+        const up = at('pointerUp', 20, 20);
+        layer.dispatch('pointerUp', up);
 
         expect(down.detail.consumed).toBe(true);
         expect(up.detail.consumed).toBe(true);
         expect(click).toHaveBeenCalledOnce();
 
         // An event consumed by an upper layer does not reach the interface
-        const consumed = at('mouseDown', 20, 20);
+        const consumed = at('pointerDown', 20, 20);
         consumed.detail.consumed = true;
-        layer.dispatch('mouseDown', consumed);
-        layer.dispatch('mouseUp', at('mouseUp', 20, 20));
+        layer.dispatch('pointerDown', consumed);
+        layer.dispatch('pointerUp', at('pointerUp', 20, 20));
         expect(click).toHaveBeenCalledOnce();
     });
 });

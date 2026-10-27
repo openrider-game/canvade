@@ -8,7 +8,7 @@ import {
     GameKeyboardEvent,
     GameMouseEvent,
     GamePinchEvent,
-    GameTouchEvent,
+    GamePointerEvent,
     GameWheelEvent,
 } from '../event/types/dom-events';
 import { GameLoopEvents, GameRenderEvent, GameUpdateEvent } from '../event/types/game-loop-events';
@@ -59,16 +59,13 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
     private defaultInit(): void {
         this.subscribe('enter', this.onEnter);
         this.subscribe('leave', this.onLeave);
-        this.subscribe('mouseDown', this.onMouseDown);
-        this.subscribe('mouseUp', this.onMouseUp);
-        this.subscribe('mouseMove', this.onMouseMove);
+        this.subscribe('pointerDown', this.onPointerDown);
+        this.subscribe('pointerUp', this.onPointerUp);
+        this.subscribe('pointerMove', this.onPointerMove);
+        this.subscribe('pointerEnter', this.onPointerEnter);
+        this.subscribe('pointerLeave', this.onPointerLeave);
         this.subscribe('scroll', this.onScroll);
-        this.subscribe('mouseEnter', this.onMouseEnter);
-        this.subscribe('mouseOut', this.onMouseOut);
         this.subscribe('contextMenu', this.onContextMenu);
-        this.subscribe('touchStart', this.onTouchStart);
-        this.subscribe('touchMove', this.onTouchMove);
-        this.subscribe('touchEnd', this.onTouchEnd);
         this.subscribe('pinchStart', this.onPinchStart);
         this.subscribe('pinchMove', this.onPinchMove);
         this.subscribe('pinchEnd', this.onPinchEnd);
@@ -136,44 +133,32 @@ export abstract class State extends EventEmitter<DOMEvents & StateEvents & GameL
         this.layerStack.forEach((layer) => layer.dispatch('leave'));
     }
 
-    protected onMouseDown(e: CustomEvent<GameMouseEvent>) {
-        this.dispatchInputToLayers(e, (layer) => layer.dispatch('mouseDown', e));
+    protected onPointerDown(e: CustomEvent<GamePointerEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('pointerDown', e));
     }
 
-    protected onMouseUp(e: CustomEvent<GameMouseEvent>) {
-        this.dispatchInputToLayers(e, (layer) => layer.dispatch('mouseUp', e));
+    protected onPointerUp(e: CustomEvent<GamePointerEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('pointerUp', e));
     }
 
-    protected onMouseMove(e: CustomEvent<GameMouseEvent>) {
-        this.dispatchInputToLayers(e, (layer) => layer.dispatch('mouseMove', e));
+    protected onPointerMove(e: CustomEvent<GamePointerEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('pointerMove', e));
+    }
+
+    protected onPointerEnter(e: CustomEvent<GamePointerEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('pointerEnter', e));
+    }
+
+    protected onPointerLeave(e: CustomEvent<GamePointerEvent>): void {
+        this.dispatchInputToLayers(e, (layer) => layer.dispatch('pointerLeave', e));
     }
 
     protected onScroll(e: CustomEvent<GameWheelEvent>) {
         this.dispatchInputToLayers(e, (layer) => layer.dispatch('scroll', e));
     }
 
-    protected onMouseEnter(e: CustomEvent<GameMouseEvent>): void {
-        this.dispatchInputToLayers(e, (layer) => layer.dispatch('mouseEnter', e));
-    }
-
-    protected onMouseOut(e: CustomEvent<GameMouseEvent>): void {
-        this.dispatchInputToLayers(e, (layer) => layer.dispatch('mouseOut', e));
-    }
-
     protected onContextMenu(e: CustomEvent<GameMouseEvent>) {
         this.dispatchInputToLayers(e, (layer) => layer.dispatch('contextMenu', e));
-    }
-
-    protected onTouchStart(e: CustomEvent<GameTouchEvent>): void {
-        this.dispatchInputToLayers(e, (layer) => layer.dispatch('touchStart', e));
-    }
-
-    protected onTouchMove(e: CustomEvent<GameTouchEvent>): void {
-        this.dispatchInputToLayers(e, (layer) => layer.dispatch('touchMove', e));
-    }
-
-    protected onTouchEnd(e: CustomEvent<GameTouchEvent>): void {
-        this.dispatchInputToLayers(e, (layer) => layer.dispatch('touchEnd', e));
     }
 
     protected onPinchStart(e: CustomEvent<GamePinchEvent>): void {

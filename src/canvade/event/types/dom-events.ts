@@ -1,8 +1,23 @@
 import { Vector } from '../../core/math/vector';
 import { GameEvent } from '../event-factory';
 
-/** Payload of the mouse events, `position` being in canvas pixels. */
+/** Payload of `contextMenu`, `position` being in canvas pixels. */
 export type GameMouseEvent = GameEvent & { mouseEvent: MouseEvent; position: Vector };
+/**
+ * Payload of the pointer events, of the mouse, a pen or a finger: its `pointerEvent`, giving its
+ * `pointerId`, its `pointerType` and the `button` pressed or released, and its `position` in
+ * canvas pixels.
+ */
+export type GamePointerEvent = GameEvent & {
+    pointerEvent: PointerEvent;
+    position: Vector;
+    /**
+     * Whether the game acts on the pointer, its position followed by `Mouse`: the mouse, the pen,
+     * and a finger touching while no other finger acts, until lifted or until a second finger
+     * pinches (see `DOMEvents`). The other fingers only reach the UI, e.g. on-screen buttons.
+     */
+    primary: boolean;
+};
 /**
  * Payload of the `scroll` event, with the mouse position and the canvas size in canvas pixels
  * (see `World.zoom`).
@@ -13,11 +28,6 @@ export type GameWheelEvent = GameEvent & {
     viewWidth: number;
     viewHeight: number;
 };
-/**
- * Payload of the touch events, one for each touch starting, moving or ending: its `id`, unique
- * while it lasts, and its `position` in canvas pixels.
- */
-export type GameTouchEvent = GameEvent & { touchEvent: TouchEvent; id: number; position: Vector };
 /**
  * Payload of the pinch events, of two fingers on the canvas: the point between them in canvas
  * pixels, and their distance relative to the one at the start of the pinch, above 1 when they
@@ -43,22 +53,22 @@ export type GameControlEvent = GameEvent & { key: string; keyboardEvent: Keyboar
  * or released. `copy`, `cut` and `paste` are the clipboard events, received only while the
  * canvas has the focus too.
  *
- * `touchStart`, `touchMove` and `touchEnd` follow each touch of the canvas. The touches no layer
- * consumes when they start are gestures: a single one acts as the mouse (`mouseDown`,
- * `mouseMove` and `mouseUp` with the main button), and two of them pinch (`pinchStart`,
- * `pinchMove` and `pinchEnd`).
+ * `pointerDown`, `pointerMove` and `pointerUp` follow the mouse, the pen and each finger: the
+ * mouse dispatches `pointerDown` and `pointerUp` for each of its buttons. `pointerEnter` and
+ * `pointerLeave` follow the mouse and the pen over the canvas, and a primary finger from its touch
+ * to its end. A finger is primary (see {@link GamePointerEvent.primary}) when it touches while no
+ * other finger acts, unless a layer consumes its `pointerDown`, e.g. a button of the UI; a second
+ * finger no layer consumes ends it with `pointerUp`, and both pinch (`pinchStart`, `pinchMove`
+ * and `pinchEnd`).
  */
 export type DOMEvents = {
-    mouseDown: CustomEvent<GameMouseEvent>;
-    mouseUp: CustomEvent<GameMouseEvent>;
-    mouseMove: CustomEvent<GameMouseEvent>;
+    pointerDown: CustomEvent<GamePointerEvent>;
+    pointerMove: CustomEvent<GamePointerEvent>;
+    pointerUp: CustomEvent<GamePointerEvent>;
+    pointerEnter: CustomEvent<GamePointerEvent>;
+    pointerLeave: CustomEvent<GamePointerEvent>;
     scroll: CustomEvent<GameWheelEvent>;
-    mouseEnter: CustomEvent<GameMouseEvent>;
-    mouseOut: CustomEvent<GameMouseEvent>;
     contextMenu: CustomEvent<GameMouseEvent>;
-    touchStart: CustomEvent<GameTouchEvent>;
-    touchMove: CustomEvent<GameTouchEvent>;
-    touchEnd: CustomEvent<GameTouchEvent>;
     pinchStart: CustomEvent<GamePinchEvent>;
     pinchMove: CustomEvent<GamePinchEvent>;
     pinchEnd: CustomEvent<GamePinchEvent>;

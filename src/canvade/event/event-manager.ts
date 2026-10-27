@@ -4,8 +4,13 @@ import { WorldVector } from '../world/world-vector';
 import { EventFactory } from './event-factory';
 import { Keyboard, KeyboardEventPayload } from './keyboard/keyboard';
 import { Mouse } from './mouse/mouse';
-import { TouchBridge, toCanvasPosition } from './touch/touch-bridge';
-import { GameClipboardEvent, GameControlEvent, GameKeyboardEvent } from './types/dom-events';
+import { PointerBridge, toCanvasPosition } from './pointer/pointer-bridge';
+import {
+    GameClipboardEvent,
+    GameControlEvent,
+    GameKeyboardEvent,
+    GameMouseEvent,
+} from './types/dom-events';
 import {
     CONTEXT_MENU_EVENT,
     COPY_EVENT,
@@ -15,11 +20,6 @@ import {
     KEYBOARD_DOWN_EVENT,
     KEYBOARD_UP_EVENT,
     BLUR_EVENT,
-    MOUSE_DOWN_EVENT,
-    MOUSE_ENTER_EVENT,
-    MOUSE_MOVE_EVENT,
-    MOUSE_OUT_EVENT,
-    MOUSE_UP_EVENT,
     PASTE_EVENT,
     VISIBILITY_CHANGE_EVENT,
     WHEEL_EVENT,
@@ -28,30 +28,25 @@ import {
 /**
  * Bridges the DOM events to the current state of a {@link StateManager}, as `DOMEvents`.
  *
- * Mouse positions are converted to canvas pixels and stored in {@link Mouse}, along with the
- * world position when the current state has a `World`. Key events are forwarded only while
- * the canvas has the focus, and also feed {@link Keyboard}.
+ * The pointers of the canvas (the mouse, the pen and the fingers) are bridged by a
+ * {@link PointerBridge}. The positions of the primary pointer and of the mouse wheel are
+ * converted to canvas pixels and stored in {@link Mouse}, along with the world position when the
+ * current state has a `World`. Key events are forwarded only while the canvas has the focus, and
+ * also feed {@link Keyboard}.
  *
- * The inputs held never stay stuck: a mouse button pressed on the canvas is released wherever
- * it is released, and when the canvas loses the focus (another element or window focused, the
- * page hidden, a dialog opened), every control and mouse button held is released, as their keys
- * and buttons could then be released unseen.
- *
- * Each touch of the canvas is dispatched as `touchStart`, `touchMove` and `touchEnd` by a
- * {@link TouchBridge}; the touches no layer consumes when they start become gestures: a single
- * finger dispatches the mouse events of the main button, two fingers the pinch events. The
- * touches neither scroll nor zoom the page, and the browser does not turn them into mouse events.
+ * The inputs held never stay stuck: a pointer pressed on the canvas is captured, released
+ * wherever it is released, and when the canvas loses the focus (another element or window
+ * focused, the page hidden, a dialog opened), every control and mouse button held is released,
+ * as their keys and buttons could then be released unseen.
  */
 export class EventManager {
-    /** Bridge of the touches, acting as the mouse through the mouse handlers. */
-    private readonly touch: TouchBridge;
-    /** Mouse buttons pressed on the canvas and not released yet, by `MouseEvent.button`. */
-    private readonly heldButtons = new Set<number>();
-    /** Last mouse event of the canvas, the position the held buttons are released at. */
-    private lastMouseEvent: MouseEvent | null = null;
+    /** Bridge of the mouse, the pen and the fingers. */
+    private readonly pointers: PointerBridge;
 
     constructor(private ctx: CanvasRenderingContext2D) {
-        this.touch = new TouchBridge(ctx.canvas, this);
+        this.pointers = new PointerBridge(ctx.canvas, (e, stateManager, press) =>
+            this.trackPrimary(e, stateManager, press),
+        );
     }
 
     /**
@@ -63,31 +58,13 @@ export class EventManager {
         this.ctx.canvas.tabIndex = 0;
         this.ctx.canvas.focus();
 
-        this.ctx.canvas.addEventListener(MOUSE_DOWN_EVENT, (e) =>
-            this.onMouseDown(e, stateManager),
-        );
-        this.ctx.canvas.addEventListener(MOUSE_UP_EVENT, (e) => this.onMouseUp(e, stateManager));
-        // A button pressed on the canvas, then released out of it
-        window.addEventListener(MOUSE_UP_EVENT, (e) => {
-            if (e.target !== this.ctx.canvas && this.heldButtons.has(e.button)) {
-                this.onMouseUp(e, stateManager);
-            }
-        });
-        this.ctx.canvas.addEventListener(MOUSE_MOVE_EVENT, (e) =>
-            this.onMouseMove(e, stateManager),
-        );
+        // The mouse, the pen and the fingers
+        this.pointers.listen(stateManager);
         this.ctx.canvas.addEventListener(WHEEL_EVENT, (e) => this.onScroll(e, stateManager));
-
-        this.ctx.canvas.addEventListener(MOUSE_ENTER_EVENT, (e) =>
-            this.onMouseEnter(e, stateManager),
-        );
-        this.ctx.canvas.addEventListener(MOUSE_OUT_EVENT, (e) => this.onMouseOut(e, stateManager));
 
         this.ctx.canvas.addEventListener(CONTEXT_MENU_EVENT, (e) =>
             this.onContextMenu(e, stateManager),
         );
-
-        this.touch.listen(stateManager);
 
         document.addEventListener(VISIBILITY_CHANGE_EVENT, () =>
             this.onVisibilityChange(stateManager),
@@ -107,35 +84,6 @@ export class EventManager {
         document.addEventListener(KEYBOARD_UP_EVENT, (e) =>
             this.onKeyboardUp(e as CustomEvent<KeyboardEventPayload>, stateManager),
         );
-    }
-
-    /**
-     * Focuses the canvas, records the click positions in {@link Mouse} and dispatches
-     * `mouseDown`.
-     */
-    public onMouseDown(e: MouseEvent, stateManager: StateManager): boolean {
-        e.preventDefault();
-        this.ctx.canvas.focus();
-        this.heldButtons.add(e.button);
-
-        this.dispatchMouse('mouseDown', e, stateManager, (position) => {
-            Mouse.lastClick.set(position);
-            if (stateManager.getCurrent()?.getWorld()) {
-                Mouse.lastWorldClick.set(Mouse.worldPos);
-            }
-        });
-        return true;
-    }
-
-    public onMouseUp(e: MouseEvent, stateManager: StateManager): boolean {
-        this.heldButtons.delete(e.button);
-        this.dispatchMouse('mouseUp', e, stateManager);
-        return true;
-    }
-
-    public onMouseMove(e: MouseEvent, stateManager: StateManager): boolean {
-        this.dispatchMouse('mouseMove', e, stateManager);
-        return true;
     }
 
     /**
@@ -159,34 +107,39 @@ export class EventManager {
         return true;
     }
 
-    public onMouseEnter(e: MouseEvent, stateManager: StateManager): void {
-        this.dispatchMouse('mouseEnter', e, stateManager);
-    }
-
-    public onMouseOut(e: MouseEvent, stateManager: StateManager): void {
-        this.dispatchMouse('mouseOut', e, stateManager);
-    }
-
     /** Dispatches `contextMenu` instead of opening the browser context menu. */
     public onContextMenu(e: MouseEvent, stateManager: StateManager): boolean {
         e.preventDefault();
-        this.dispatchMouse('contextMenu', e, stateManager);
+        stateManager.getCurrent()?.dispatch(
+            'contextMenu',
+            EventFactory.createGameEvent<GameMouseEvent>({
+                name: 'contextMenu',
+                consumed: false,
+                mouseEvent: e,
+                position: this.setMousePos(e, stateManager),
+            }),
+        );
         return true;
     }
 
-    /** Dispatches `touchStart` for each new touch (see {@link TouchBridge.onTouchStart}). */
-    public onTouchStart(e: TouchEvent, stateManager: StateManager): void {
-        this.touch.onTouchStart(e, stateManager);
+    /** Bridges a pointer pressed on the canvas, see {@link PointerBridge.onPointerDown}. */
+    public onPointerDown(e: PointerEvent, stateManager: StateManager): void {
+        this.pointers.onPointerDown(e, stateManager);
     }
 
-    /** Dispatches `touchMove` for each moving touch (see {@link TouchBridge.onTouchMove}). */
-    public onTouchMove(e: TouchEvent, stateManager: StateManager): void {
-        this.touch.onTouchMove(e, stateManager);
+    /** Bridges a pointer moving, see {@link PointerBridge.onPointerMove}. */
+    public onPointerMove(e: PointerEvent, stateManager: StateManager): void {
+        this.pointers.onPointerMove(e, stateManager);
     }
 
-    /** Dispatches `touchEnd` for each touch ending (see {@link TouchBridge.onTouchEnd}). */
-    public onTouchEnd(e: TouchEvent, stateManager: StateManager): void {
-        this.touch.onTouchEnd(e, stateManager);
+    /** Bridges a pointer released, see {@link PointerBridge.onPointerUp}. */
+    public onPointerUp(e: PointerEvent, stateManager: StateManager): void {
+        this.pointers.onPointerUp(e, stateManager);
+    }
+
+    /** Bridges a pointer cancelled, see {@link PointerBridge.onPointerCancel}. */
+    public onPointerCancel(e: PointerEvent, stateManager: StateManager): void {
+        this.pointers.onPointerCancel(e, stateManager);
     }
 
     /** Dispatches `visibilityChange`, releasing the inputs held first when the page is hidden. */
@@ -200,22 +153,11 @@ export class EventManager {
     /**
      * Releases every input held, as when the canvas loses the focus: each control held (see
      * {@link Keyboard.releaseAll}), then each mouse button pressed on the canvas, dispatching
-     * `mouseUp` at the last mouse position.
+     * `pointerUp` (see {@link PointerBridge.releaseButtons}).
      */
     public releaseInputs(stateManager: StateManager): void {
         Keyboard.releaseAll();
-
-        const last = this.lastMouseEvent;
-        for (const button of [...this.heldButtons]) {
-            this.onMouseUp(
-                new MouseEvent(MOUSE_UP_EVENT, {
-                    button,
-                    clientX: last?.clientX ?? 0,
-                    clientY: last?.clientY ?? 0,
-                }),
-                stateManager,
-            );
-        }
+        this.pointers.releaseButtons(stateManager);
     }
 
     /**
@@ -294,24 +236,20 @@ export class EventManager {
     }
 
     /**
-     * Records the mouse position and dispatches a mouse event to the current state.
+     * Records the position of the primary pointer in {@link Mouse}, and its click positions when
+     * it presses.
      *
-     * @param beforeDispatch - Called with the position in canvas pixels before dispatching.
+     * @returns A copy of the position in canvas pixels.
      */
-    private dispatchMouse(
-        name: 'mouseDown' | 'mouseUp' | 'mouseMove' | 'mouseEnter' | 'mouseOut' | 'contextMenu',
-        e: MouseEvent,
-        stateManager: StateManager,
-        beforeDispatch?: (position: Vector) => void,
-    ): void {
+    private trackPrimary(e: MouseEvent, stateManager: StateManager, press: boolean): Vector {
         const position = this.setMousePos(e, stateManager);
-        beforeDispatch?.(position);
-        stateManager
-            .getCurrent()
-            ?.dispatch(
-                name,
-                EventFactory.createGameEvent({ name, consumed: false, mouseEvent: e, position }),
-            );
+        if (press) {
+            Mouse.lastClick.set(position);
+            if (stateManager.getCurrent()?.getWorld()) {
+                Mouse.lastWorldClick.set(Mouse.worldPos);
+            }
+        }
+        return position;
     }
 
     /**
@@ -356,7 +294,6 @@ export class EventManager {
      * @returns A copy of the position in canvas pixels.
      */
     private setMousePos(e: MouseEvent, stateManager: StateManager): Vector {
-        this.lastMouseEvent = e;
         Mouse.mousePos.set(toCanvasPosition(this.ctx.canvas, e));
 
         const world = stateManager.getCurrent()?.getWorld();

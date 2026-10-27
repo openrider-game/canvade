@@ -6,8 +6,7 @@ import {
     DOMEvents,
     GameClipboardEvent,
     GameKeyboardEvent,
-    GameMouseEvent,
-    GameTouchEvent,
+    GamePointerEvent,
     GameWheelEvent,
 } from '../event/types/dom-events';
 import { GameLoopEvents, GameRenderEvent, GameUpdateEvent } from '../event/types/game-loop-events';
@@ -17,32 +16,37 @@ import { buildUIElementTree, UIStructureDefinition, UIStyleDefinition } from './
 import { UITouchTracker } from './ui-touch-tracker';
 
 /**
- * Renders a UI tree and routes the mouse and the keyboard to it. Each `Layer` owns one.
+ * Renders a UI tree and routes the pointers and the keyboard to it. Each `Layer` owns one.
  *
- * It renders the tree on `render`, advances its animations on `update`, and handles the input:
- * - `mouseMove` updates the hovered element;
- * - `mouseDown` over an element focuses it and makes it active (pressed), elsewhere it clears
+ * It renders the tree on `render`, advances its animations on `update`, and handles the input.
+ * The mouse and the pen:
+ * - `pointerMove` updates the hovered element;
+ * - `pointerDown` over an element focuses it and makes it active (pressed), elsewhere it clears
  *   the focus;
- * - `mouseUp` dispatches `click` when released over the active element, then clears it;
- * - `mouseMove` while an element is pressed lets it follow the mouse (see
- *   `UIElement.handlePointerDrag`);
- * - `touchStart` over an element focuses and presses it; each finger then presses the element
- *   under it, sliding from an element to the next one, until `touchEnd`, which dispatches
- *   `click` when released over the element it started on (a tap). A finger on an element
- *   following the pointer drags it instead (see `UIElement.handlePointerDrag`), e.g. to scroll.
- *   Several fingers press several elements at once, each element dispatching `press` and
- *   `release` (see `UIElement.press`), as the main mouse button does too. The fingers are
- *   tracked by a `UITouchTracker`;
+ * - `pointerUp` dispatches `click` when released over the active element, then clears it;
+ * - `pointerMove` while an element is pressed lets it follow the pointer (see
+ *   `UIElement.handlePointerDrag`).
+ *
+ * The fingers, primary or not, are tracked by a `UITouchTracker`:
+ * - `pointerDown` over an element focuses and presses it, elsewhere it clears the focus; each
+ *   finger then presses the element under it, sliding from an element to the next one, until
+ *   `pointerUp`, which dispatches `click` when released over the element it started on (a tap).
+ *   A finger on an element following the pointer drags it instead (see
+ *   `UIElement.handlePointerDrag`), e.g. to scroll. Several fingers press several elements at
+ *   once, each element dispatching `press` and `release` (see `UIElement.press`), as the main
+ *   mouse button does too.
+ *
+ * And:
  * - `scroll` (the mouse wheel) scrolls the elements under the mouse (see `UIElement.handleWheel`);
  * - `keyDown`, `copy`, `cut` and `paste` are given to the focused element (see
  *   `UIElement.handleKeyDown` and `UIElement.handleClipboard`).
  *
- * Only the main mouse button presses and clicks the elements. Mouse events over an element
+ * Only the main mouse button presses and clicks the elements. Pointer events over an element
  * (or ending a press) are marked as consumed, so the layers below do not receive them; the
  * other buttons are consumed when pressed over an element, but never released by the UI, so
  * that a drag started outside of it can end over it. The mouse wheel over an element is consumed
  * too, so that it does not reach the layers below, as are the keys and clipboard events handled
- * by the focused element, and the touches starting over an element, with their moves and end.
+ * by the focused element, and the fingers touching an element, with their moves and end.
  * The focused and active elements are global: pressing an element of a manager clears them in the
  * manager that previously held them.
  *
@@ -79,13 +83,10 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         super();
         this.subscribe('render', this.onRender);
         this.subscribe('update', this.onUpdate);
-        this.subscribe('mouseDown', this.onMouseDown);
-        this.subscribe('mouseMove', this.onMouseMove);
-        this.subscribe('mouseUp', this.onMouseUp);
-        this.subscribe('mouseOut', this.onMouseOut);
-        this.subscribe('touchStart', this.onTouchStart);
-        this.subscribe('touchMove', this.onTouchMove);
-        this.subscribe('touchEnd', this.onTouchEnd);
+        this.subscribe('pointerDown', this.onPointerDown);
+        this.subscribe('pointerMove', this.onPointerMove);
+        this.subscribe('pointerUp', this.onPointerUp);
+        this.subscribe('pointerLeave', this.onPointerLeave);
         this.subscribe('keyDown', this.onKeyDown);
         this.subscribe('scroll', this.onScroll);
         this.subscribe('copy', this.onClipboard);
@@ -173,18 +174,30 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         this.rootNode?.updateAnimations(event.detail.delta);
     }
 
-    private onMouseDown(event: CustomEvent<GameMouseEvent>): void {
+    private onPointerDown(event: CustomEvent<GamePointerEvent>): void {
         if (event.detail.consumed || !this.rootNode) {
             return;
         }
 
-        const { x, y } = this.toUIPosition(event.detail.position);
+        const { pointerEvent } = event.detail;
+        const position = this.toUIPosition(event.detail.position);
+        if (UIManager.isTouch(pointerEvent)) {
+            if (this.touches.start(pointerEvent.pointerId, position, pointerEvent)) {
+                event.detail.consumed = true;
+            } else if (UIManager.interactionOwner === this) {
+                // Touching outside of the UI removes the focus, e.g. from an input
+                this.rootNode.setFocusedElement(null);
+            }
+            return;
+        }
+
+        const { x, y } = position;
         const target = this.rootNode.findElementAt(x, y);
-        const mainButton = event.detail.mouseEvent.button === MOUSE_MAIN_BUTTON;
+        const mainButton = pointerEvent.button === MOUSE_MAIN_BUTTON;
         if (target) {
             if (mainButton) {
                 this.claimInteraction(target);
-                target.handlePointerDown?.(x, y, event.detail.mouseEvent);
+                target.handlePointerDown?.(x, y, pointerEvent);
                 this.mousePressed?.release();
                 this.mousePressed = target;
                 target.press();
@@ -196,16 +209,25 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         }
     }
 
-    private onMouseUp(event: CustomEvent<GameMouseEvent>): void {
-        if (!this.rootNode || event.detail.mouseEvent.button !== MOUSE_MAIN_BUTTON) {
+    private onPointerUp(event: CustomEvent<GamePointerEvent>): void {
+        const { pointerEvent } = event.detail;
+        const position = this.toUIPosition(event.detail.position);
+        // A finger releases its element, clicking it when released over its start element
+        if (UIManager.isTouch(pointerEvent)) {
+            if (this.touches.end(pointerEvent.pointerId, position, pointerEvent)) {
+                event.detail.consumed = true;
+            }
+            return;
+        }
+        if (!this.rootNode || pointerEvent.button !== MOUSE_MAIN_BUTTON) {
             return;
         }
 
-        const { x, y } = this.toUIPosition(event.detail.position);
+        const { x, y } = position;
         const target = this.rootNode.findElementAt(x, y);
         const activeTarget = this.findElement(this.rootNode, (element) => element.isActive());
         if (!event.detail.consumed && activeTarget && activeTarget === target) {
-            activeTarget.handleClick(x, y, event.detail.mouseEvent);
+            activeTarget.handleClick(x, y, pointerEvent);
         }
 
         // A press started on the UI also consumes its release, even outside the element
@@ -217,39 +239,21 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         this.mousePressed = null;
     }
 
-    /** Focuses and presses the element under a new touch, consuming the touch. */
-    private onTouchStart(event: CustomEvent<GameTouchEvent>): void {
-        if (event.detail.consumed || !this.rootNode) {
+    private onPointerMove(event: CustomEvent<GamePointerEvent>): void {
+        const { pointerEvent } = event.detail;
+        const position = this.toUIPosition(event.detail.position);
+        // A finger drags its element, or slides to the element under it
+        if (UIManager.isTouch(pointerEvent)) {
+            if (this.touches.move(pointerEvent.pointerId, position)) {
+                event.detail.consumed = true;
+            }
             return;
         }
-
-        const { id, position, touchEvent } = event.detail;
-        if (this.touches.start(id, this.toUIPosition(position), touchEvent)) {
-            event.detail.consumed = true;
-        }
-    }
-
-    /** Lets a touch drag its element, or slide to the element under it. */
-    private onTouchMove(event: CustomEvent<GameTouchEvent>): void {
-        if (this.touches.move(event.detail.id, this.toUIPosition(event.detail.position))) {
-            event.detail.consumed = true;
-        }
-    }
-
-    /** Releases the element of a touch, clicking it when released over its start element. */
-    private onTouchEnd(event: CustomEvent<GameTouchEvent>): void {
-        const { id, position, touchEvent } = event.detail;
-        if (this.touches.end(id, this.toUIPosition(position), touchEvent)) {
-            event.detail.consumed = true;
-        }
-    }
-
-    private onMouseMove(event: CustomEvent<GameMouseEvent>): void {
         if (!this.rootNode) {
             return;
         }
 
-        const { x, y } = this.toUIPosition(event.detail.position);
+        const { x, y } = position;
         this.pointer = new Vector(x, y);
         const target = this.rootNode.findElementAt(x, y);
         this.rootNode.setHoveredElement(target);
@@ -261,8 +265,8 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         }
     }
 
-    /** Clears the hovered element when the mouse leaves the canvas. */
-    private onMouseOut(): void {
+    /** Clears the hovered element when the pointer leaves the canvas. */
+    private onPointerLeave(): void {
         this.pointer = null;
         this.rootNode?.setHoveredElement(null);
     }
@@ -310,6 +314,11 @@ export class UIManager extends EventEmitter<DOMEvents & StateEvents & GameLoopEv
         if (focused?.handleKeyDown?.(event.detail.keyboardEvent)) {
             event.detail.consumed = true;
         }
+    }
+
+    /** Whether a pointer is a finger, tracked by the touch tracker. */
+    private static isTouch(e: PointerEvent): boolean {
+        return e.pointerType === 'touch';
     }
 
     /** Converts a position in canvas pixels to UI pixels. */

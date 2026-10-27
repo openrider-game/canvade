@@ -12,6 +12,8 @@ export function createCanvasMock(
         tabIndex: 0,
         focus: vi.fn(),
         addEventListener: vi.fn(),
+        setPointerCapture: vi.fn(),
+        style: {},
         getBoundingClientRect: () => bounds,
     } as unknown as HTMLCanvasElement;
 

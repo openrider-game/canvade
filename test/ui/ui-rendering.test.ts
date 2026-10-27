@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { Vector } from '../../src/canvade/core/math/vector';
 import { EventManager } from '../../src/canvade/event/event-manager';
-import { GameMouseEvent } from '../../src/canvade/event/types/dom-events';
+import { GamePointerEvent } from '../../src/canvade/event/types/dom-events';
 import { GameRenderEvent } from '../../src/canvade/event/types/game-loop-events';
 import { Layer } from '../../src/canvade/state/layer/layer';
 import { State } from '../../src/canvade/state/state';
@@ -95,7 +95,7 @@ describe('UI rendering and interaction', () => {
             },
         ]);
         const behindMouseUp = vi.fn();
-        behind.subscribe('mouseUp', behindMouseUp);
+        behind.subscribe('pointerUp', behindMouseUp);
         front.uiRenderer.setRootElement(frontRoot);
         TestState.testLayers = new Map([
             ['behind', behind],
@@ -110,27 +110,41 @@ describe('UI rendering and interaction', () => {
                 detail: { name: 'render', consumed: false, ctx },
             }),
         );
-        const mouseDown = new CustomEvent<GameMouseEvent>('mouseDown', {
+        const mouseDown = new CustomEvent<GamePointerEvent>('pointerDown', {
             detail: {
-                name: 'mouseDown',
+                name: 'pointerDown',
                 consumed: false,
-                mouseEvent: { button: 0, clientX: 50, clientY: 50 } as MouseEvent,
+                pointerEvent: {
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    button: 0,
+                    clientX: 50,
+                    clientY: 50,
+                } as PointerEvent,
+                primary: true,
                 position: new Vector(50, 50),
             },
         });
-        state.dispatch('mouseDown', mouseDown);
+        state.dispatch('pointerDown', mouseDown);
         expect(frontRoot.children[0].isActive()).toBe(true);
         expect(frontRoot.children[0].isFocused()).toBe(true);
-        const mouseUp = new CustomEvent<GameMouseEvent>('mouseUp', {
+        const mouseUp = new CustomEvent<GamePointerEvent>('pointerUp', {
             detail: {
-                name: 'mouseUp',
+                name: 'pointerUp',
                 consumed: false,
-                mouseEvent: { button: 0, clientX: 50, clientY: 50 } as MouseEvent,
+                pointerEvent: {
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    button: 0,
+                    clientX: 50,
+                    clientY: 50,
+                } as PointerEvent,
+                primary: true,
                 position: new Vector(50, 50),
             },
         });
 
-        state.dispatch('mouseUp', mouseUp);
+        state.dispatch('pointerUp', mouseUp);
 
         expect(frontClick).toHaveBeenCalledOnce();
         expect(mouseUp.detail.consumed).toBe(true);
@@ -139,7 +153,7 @@ describe('UI rendering and interaction', () => {
         expect(frontRoot.children[0].isFocused()).toBe(true);
     });
 
-    test('event manager stores translated canvas-pixel coordinates on mouse-up', () => {
+    test('event manager stores translated canvas-pixel coordinates on pointer up', () => {
         const ctx = createCanvasMock().context;
         const dispatch = vi.fn();
         const stateManager = {
@@ -149,15 +163,18 @@ describe('UI rendering and interaction', () => {
             }),
         };
         const eventManager = new EventManager(ctx);
-        const mouseEvent = {
+        const pointerEvent = {
+            pointerId: 1,
+            pointerType: 'mouse',
+            button: 0,
             clientX: 40,
             clientY: 25,
             preventDefault: vi.fn(),
-        } as unknown as MouseEvent;
+        } as unknown as PointerEvent;
 
-        eventManager.onMouseUp(mouseEvent, stateManager as never);
+        eventManager.onPointerUp(pointerEvent, stateManager as never);
 
-        const dispatchedEvent = dispatch.mock.calls[0][1] as CustomEvent<GameMouseEvent>;
+        const dispatchedEvent = dispatch.mock.calls[0][1] as CustomEvent<GamePointerEvent>;
         expect(dispatchedEvent.detail.position).toEqual(new Vector(60, 40));
     });
 
@@ -174,16 +191,23 @@ describe('UI rendering and interaction', () => {
         layer.uiRenderer.render(createCanvasMock().context);
         const hoverIn = vi.fn();
         root.children[0].subscribe('hoverIn', hoverIn);
-        const mouseMove = new CustomEvent<GameMouseEvent>('mouseMove', {
+        const mouseMove = new CustomEvent<GamePointerEvent>('pointerMove', {
             detail: {
-                name: 'mouseMove',
+                name: 'pointerMove',
                 consumed: false,
-                mouseEvent: { button: 0, clientX: 20, clientY: 20 } as MouseEvent,
+                pointerEvent: {
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    button: 0,
+                    clientX: 20,
+                    clientY: 20,
+                } as PointerEvent,
+                primary: true,
                 position: new Vector(20, 20),
             },
         });
 
-        layer.uiRenderer.dispatch('mouseMove', mouseMove);
+        layer.uiRenderer.dispatch('pointerMove', mouseMove);
 
         expect(root.children[0].isHovered()).toBe(true);
         expect(hoverIn).toHaveBeenCalledOnce();
@@ -199,32 +223,39 @@ describe('UI rendering and interaction', () => {
         layer.uiRenderer.render(createCanvasMock().context);
         const button = root.children[0];
         const mouseEvent = (name: string, mouseButton: number, x = 10) =>
-            new CustomEvent<GameMouseEvent>(name, {
+            new CustomEvent<GamePointerEvent>(name, {
                 detail: {
                     name,
                     consumed: false,
-                    mouseEvent: { button: mouseButton, clientX: x, clientY: 20 } as MouseEvent,
+                    pointerEvent: {
+                        pointerId: 1,
+                        pointerType: 'mouse',
+                        button: mouseButton,
+                        clientX: x,
+                        clientY: 20,
+                    } as PointerEvent,
+                    primary: true,
                     position: new Vector(x, 20),
                 },
             });
 
         // A right click over the button is kept from the layers below, without clicking it
-        const rightDown = mouseEvent('mouseDown', 2);
-        layer.uiRenderer.dispatch('mouseDown', rightDown);
+        const rightDown = mouseEvent('pointerDown', 2);
+        layer.uiRenderer.dispatch('pointerDown', rightDown);
         expect(rightDown.detail.consumed).toBe(true);
         expect(button.isActive()).toBe(false);
-        layer.uiRenderer.dispatch('mouseUp', mouseEvent('mouseUp', 2));
+        layer.uiRenderer.dispatch('pointerUp', mouseEvent('pointerUp', 2));
         expect(click).not.toHaveBeenCalled();
 
         // Releasing another button during a press neither clicks nor ends the press
-        layer.uiRenderer.dispatch('mouseDown', mouseEvent('mouseDown', 0));
-        const rightUp = mouseEvent('mouseUp', 2, 300);
-        layer.uiRenderer.dispatch('mouseUp', rightUp);
+        layer.uiRenderer.dispatch('pointerDown', mouseEvent('pointerDown', 0));
+        const rightUp = mouseEvent('pointerUp', 2, 300);
+        layer.uiRenderer.dispatch('pointerUp', rightUp);
         expect(click).not.toHaveBeenCalled();
         expect(rightUp.detail.consumed).toBe(false);
         expect(button.isActive()).toBe(true);
 
-        layer.uiRenderer.dispatch('mouseUp', mouseEvent('mouseUp', 0));
+        layer.uiRenderer.dispatch('pointerUp', mouseEvent('pointerUp', 0));
         expect(click).toHaveBeenCalledOnce();
     });
 
@@ -253,75 +284,117 @@ describe('UI rendering and interaction', () => {
         expect(root.children[0].getBounds()).toEqual({ x: 0, y: 0, width: 200, height: 100 });
         const content = root.children[0];
         expect(content.children[0].getBounds()).toEqual({ x: 0, y: 0, width: 80, height: 40 });
-        const mouseDown = new CustomEvent<GameMouseEvent>('mouseDown', {
+        const mouseDown = new CustomEvent<GamePointerEvent>('pointerDown', {
             detail: {
-                name: 'mouseDown',
+                name: 'pointerDown',
                 consumed: false,
-                mouseEvent: { button: 0, clientX: 10, clientY: 20 } as MouseEvent,
+                pointerEvent: {
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    button: 0,
+                    clientX: 10,
+                    clientY: 20,
+                } as PointerEvent,
+                primary: true,
                 position: new Vector(10, 20),
             },
         });
-        layer.uiRenderer.dispatch('mouseDown', mouseDown);
+        layer.uiRenderer.dispatch('pointerDown', mouseDown);
         expect(content.children[0].isActive()).toBe(true);
-        const mouseUp = new CustomEvent<GameMouseEvent>('mouseUp', {
+        const mouseUp = new CustomEvent<GamePointerEvent>('pointerUp', {
             detail: {
-                name: 'mouseUp',
+                name: 'pointerUp',
                 consumed: false,
-                mouseEvent: { button: 0, clientX: 100, clientY: 20 } as MouseEvent,
+                pointerEvent: {
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    button: 0,
+                    clientX: 100,
+                    clientY: 20,
+                } as PointerEvent,
+                primary: true,
                 position: new Vector(100, 20),
             },
         });
 
-        layer.uiRenderer.dispatch('mouseUp', mouseUp);
+        layer.uiRenderer.dispatch('pointerUp', mouseUp);
 
         expect(startClick).not.toHaveBeenCalled();
         expect(settingsClick).not.toHaveBeenCalled();
         expect(mouseUp.detail.consumed).toBe(true);
         expect(root.isActive()).toBe(false);
 
-        const matchingMouseDown = new CustomEvent<GameMouseEvent>('mouseDown', {
+        const matchingMouseDown = new CustomEvent<GamePointerEvent>('pointerDown', {
             detail: {
-                name: 'mouseDown',
+                name: 'pointerDown',
                 consumed: false,
-                mouseEvent: { button: 0, clientX: 10, clientY: 20 } as MouseEvent,
+                pointerEvent: {
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    button: 0,
+                    clientX: 10,
+                    clientY: 20,
+                } as PointerEvent,
+                primary: true,
                 position: new Vector(10, 20),
             },
         });
-        const matchingMouseUp = new CustomEvent<GameMouseEvent>('mouseUp', {
+        const matchingMouseUp = new CustomEvent<GamePointerEvent>('pointerUp', {
             detail: {
-                name: 'mouseUp',
+                name: 'pointerUp',
                 consumed: false,
-                mouseEvent: { button: 0, clientX: 10, clientY: 20 } as MouseEvent,
+                pointerEvent: {
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    button: 0,
+                    clientX: 10,
+                    clientY: 20,
+                } as PointerEvent,
+                primary: true,
                 position: new Vector(10, 20),
             },
         });
 
-        layer.uiRenderer.dispatch('mouseDown', matchingMouseDown);
-        layer.uiRenderer.dispatch('mouseUp', matchingMouseUp);
+        layer.uiRenderer.dispatch('pointerDown', matchingMouseDown);
+        layer.uiRenderer.dispatch('pointerUp', matchingMouseUp);
 
         expect(startClick).toHaveBeenCalledOnce();
         expect(startClick).toHaveBeenCalledWith(10, 20, content.children[0]);
         expect(settingsClick).not.toHaveBeenCalled();
 
-        const overlapMouseDown = new CustomEvent<GameMouseEvent>('mouseDown', {
+        const overlapMouseDown = new CustomEvent<GamePointerEvent>('pointerDown', {
             detail: {
-                name: 'mouseDown',
+                name: 'pointerDown',
                 consumed: false,
-                mouseEvent: { button: 0, clientX: 30, clientY: 20 } as MouseEvent,
+                pointerEvent: {
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    button: 0,
+                    clientX: 30,
+                    clientY: 20,
+                } as PointerEvent,
+                primary: true,
                 position: new Vector(30, 20),
             },
         });
-        const overlapMouseUp = new CustomEvent<GameMouseEvent>('mouseUp', {
+        const overlapMouseUp = new CustomEvent<GamePointerEvent>('pointerUp', {
             detail: {
-                name: 'mouseUp',
+                name: 'pointerUp',
                 consumed: false,
-                mouseEvent: { button: 0, clientX: 30, clientY: 20 } as MouseEvent,
+                pointerEvent: {
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    button: 0,
+                    clientX: 30,
+                    clientY: 20,
+                } as PointerEvent,
+                primary: true,
                 position: new Vector(30, 20),
             },
         });
 
-        layer.uiRenderer.dispatch('mouseDown', overlapMouseDown);
-        layer.uiRenderer.dispatch('mouseUp', overlapMouseUp);
+        layer.uiRenderer.dispatch('pointerDown', overlapMouseDown);
+        layer.uiRenderer.dispatch('pointerUp', overlapMouseUp);
 
         expect(startClick).toHaveBeenCalledOnce();
         expect(settingsClick).toHaveBeenCalledOnce();
@@ -337,20 +410,27 @@ describe('UI rendering and interaction', () => {
         backgroundManager.render(ctx);
         foregroundManager.render(ctx);
         const createMouseDown = () =>
-            new CustomEvent<GameMouseEvent>('mouseDown', {
+            new CustomEvent<GamePointerEvent>('pointerDown', {
                 detail: {
-                    name: 'mouseDown',
+                    name: 'pointerDown',
                     consumed: false,
-                    mouseEvent: { button: 0, clientX: 20, clientY: 20 } as MouseEvent,
+                    pointerEvent: {
+                        pointerId: 1,
+                        pointerType: 'mouse',
+                        button: 0,
+                        clientX: 20,
+                        clientY: 20,
+                    } as PointerEvent,
+                    primary: true,
                     position: new Vector(20, 20),
                 },
             });
 
-        backgroundManager.dispatch('mouseDown', createMouseDown());
+        backgroundManager.dispatch('pointerDown', createMouseDown());
         expect(backgroundRoot.children[0].isFocused()).toBe(true);
         expect(backgroundRoot.children[0].isActive()).toBe(true);
 
-        foregroundManager.dispatch('mouseDown', createMouseDown());
+        foregroundManager.dispatch('pointerDown', createMouseDown());
 
         expect(backgroundRoot.children[0].isFocused()).toBe(false);
         expect(backgroundRoot.children[0].isActive()).toBe(false);

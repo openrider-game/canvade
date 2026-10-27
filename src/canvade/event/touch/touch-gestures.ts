@@ -6,8 +6,8 @@ export interface TouchPoint {
 
 /** Events a {@link TouchGestures} turns the touches into. */
 export interface TouchGestureOutput {
-    /** Acts as the mouse: pressing, moving or releasing its main button at a point. */
-    mouse(type: 'mousedown' | 'mousemove' | 'mouseup', point: TouchPoint, event: TouchEvent): void;
+    /** Ends the finger acting alone, a second finger joining it to pinch, at its last event. */
+    release(event: PointerEvent): void;
     /**
      * Pinches: `center` between the two fingers, `scale` their distance relative to the one at
      * the start of the pinch.
@@ -16,81 +16,81 @@ export interface TouchGestureOutput {
 }
 
 /**
- * State of the gesture: none yet, one finger acting as the mouse, two fingers pinching, or over
- * until every finger is lifted, e.g. once a finger of a pinch was lifted.
+ * State of the gesture: none yet, one finger acting alone, two fingers pinching, or over until
+ * every finger is lifted, e.g. once a finger of a pinch was lifted.
  */
-type Gesture = 'idle' | 'mouse' | 'pinch' | 'over';
+type Gesture = 'idle' | 'single' | 'pinch' | 'over';
 
 /**
- * Turns the touches no layer took into gestures, used by the event manager: a single finger
- * acts as the mouse with its main button, so that a game made for the mouse works with the
- * fingers, and two fingers pinch.
+ * Follows the fingers no layer took, used by the pointer bridge: a single finger acts alone, as
+ * the primary pointer, and two fingers pinch.
  *
- * A second finger ends the mouse press of the first one; lifting a finger of a pinch ends it,
- * the other finger doing nothing until lifted too. More fingers are ignored.
+ * A second finger ends the first one acting alone; lifting a finger of a pinch ends it, the
+ * other finger doing nothing until lifted too. More fingers are ignored.
  */
 export class TouchGestures {
-    /** Touches of the gesture, by id, with their last position. */
-    private readonly touches = new Map<number, TouchPoint>();
+    /** Last event of each finger of the gesture, by pointer id. */
+    private readonly touches = new Map<number, PointerEvent>();
     private gesture: Gesture = 'idle';
     /** Distance between the fingers at the start of the pinch, in CSS pixels. */
     private startDistance = 1;
 
     public constructor(private readonly output: TouchGestureOutput) {}
 
-    /** Adds a touch starting, which no layer took. */
-    public start(id: number, point: TouchPoint, event: TouchEvent): void {
+    /** Whether no finger acts: a finger touching now acts alone, unless a layer takes it. */
+    public get idle(): boolean {
+        return this.gesture === 'idle';
+    }
+
+    /** Adds a finger touching the canvas, which no layer took. */
+    public start(event: PointerEvent): void {
         // A third finger, or a finger once the gesture is over, is ignored
         if (this.gesture === 'pinch' || this.gesture === 'over') {
             return;
         }
-        this.touches.set(id, TouchGestures.copy(point));
-        const points = [...this.touches.values()];
-
-        if (this.gesture === 'idle' && points.length === 1) {
-            this.gesture = 'mouse';
-            this.output.mouse('mousedown', points[0], event);
-        } else if ((this.gesture === 'idle' || this.gesture === 'mouse') && points.length >= 2) {
-            if (this.gesture === 'mouse') {
-                this.output.mouse('mouseup', points[0], event);
-            }
-            this.gesture = 'pinch';
-            this.startDistance = TouchGestures.distance(points);
-            this.output.pinch('pinchStart', TouchGestures.center(points), 1);
-        }
-    }
-
-    /** Follows a touch of the gesture moving, ignoring the other touches. */
-    public move(id: number, point: TouchPoint, event: TouchEvent): void {
-        if (!this.touches.has(id)) {
+        const single = [...this.touches.values()][0];
+        this.touches.set(event.pointerId, event);
+        if (this.gesture === 'idle') {
+            this.gesture = 'single';
             return;
         }
-        this.touches.set(id, TouchGestures.copy(point));
+
+        // A second finger: the first one stops acting alone, both pinch
+        this.output.release(single);
+        this.gesture = 'pinch';
+        const points = [...this.touches.values()];
+        this.startDistance = TouchGestures.distance(points);
+        this.output.pinch('pinchStart', TouchGestures.center(points), 1);
+    }
+
+    /** Follows a finger of the gesture moving, ignoring the other fingers. */
+    public move(event: PointerEvent): void {
+        if (!this.touches.has(event.pointerId)) {
+            return;
+        }
+        this.touches.set(event.pointerId, event);
         const points = [...this.touches.values()];
 
-        if (this.gesture === 'mouse') {
-            this.output.mouse('mousemove', points[0], event);
-        } else if (this.gesture === 'pinch' && points.length >= 2) {
+        if (this.gesture === 'pinch' && points.length >= 2) {
             this.output.pinch('pinchMove', TouchGestures.center(points), this.scale(points));
         }
     }
 
-    /** Ends a touch of the gesture, ignoring the other touches. */
-    public end(id: number, point: TouchPoint, event: TouchEvent): void {
-        if (!this.touches.has(id)) {
+    /** Ends a finger of the gesture, ignoring the other fingers. */
+    public end(event: PointerEvent): void {
+        if (!this.touches.has(event.pointerId)) {
             return;
         }
         const points = [...this.touches.values()];
 
-        if (this.gesture === 'mouse') {
-            this.output.mouse('mouseup', TouchGestures.copy(point), event);
+        if (this.gesture === 'single') {
             this.gesture = 'over';
         } else if (this.gesture === 'pinch' && points.length >= 2) {
             this.output.pinch('pinchEnd', TouchGestures.center(points), this.scale(points));
             this.gesture = 'over';
         }
 
-        this.touches.delete(id);
+        this.touches.delete(event.pointerId);
         if (this.touches.size === 0) {
             this.gesture = 'idle';
         }
@@ -98,10 +98,6 @@ export class TouchGestures {
 
     private scale(points: TouchPoint[]): number {
         return TouchGestures.distance(points) / this.startDistance;
-    }
-
-    private static copy({ clientX, clientY }: TouchPoint): TouchPoint {
-        return { clientX, clientY };
     }
 
     private static center([a, b]: TouchPoint[]): TouchPoint {

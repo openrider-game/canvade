@@ -73,14 +73,14 @@ export class UITouchTracker {
      *
      * @returns Whether the touch started over an element, consuming it.
      */
-    public start(id: number, position: Vector, touchEvent: TouchEvent): boolean {
+    public start(id: number, position: Vector, pointerEvent: PointerEvent): boolean {
         const target = this.getRoot()?.findElementAt(position.x, position.y);
         if (!target) {
             return false;
         }
 
         this.claimFocus(target);
-        target.handlePointerDown?.(position.x, position.y, touchEvent);
+        target.handlePointerDown?.(position.x, position.y, pointerEvent);
         target.press();
         this.touches.set(id, {
             start: target,
@@ -117,7 +117,7 @@ export class UITouchTracker {
      *
      * @returns Whether the touch was tracked, consuming its end.
      */
-    public end(id: number, position: Vector, touchEvent: TouchEvent): boolean {
+    public end(id: number, position: Vector, pointerEvent: PointerEvent): boolean {
         const touch = this.touches.get(id);
         if (!touch) {
             return false;
@@ -128,7 +128,7 @@ export class UITouchTracker {
         const target = this.getRoot()?.findElementAt(x, y) ?? null;
         touch.current?.release();
         if (touch.start && target === touch.start) {
-            touch.start.handleClick(x, y, touchEvent);
+            touch.start.handleClick(x, y, pointerEvent);
         }
         return true;
     }

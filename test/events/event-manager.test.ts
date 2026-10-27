@@ -11,6 +11,17 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
+/** Pointer event of the mouse, with its options as properties. */
+function mousePointer(init: Partial<PointerEvent> = {}) {
+    return {
+        pointerId: 1,
+        pointerType: 'mouse',
+        button: 0,
+        preventDefault: vi.fn(),
+        ...init,
+    } as unknown as PointerEvent;
+}
+
 describe('EventManager mouse input', () => {
     test('scales client coordinates to canvas pixels before dispatch', () => {
         const { canvas, context } = createCanvasMock();
@@ -24,21 +35,26 @@ describe('EventManager mouse input', () => {
             getCurrent: () => ({ getWorld: () => world, dispatch }),
         };
         const eventManager = new EventManager(context);
-        const mouseEvent = {
-            clientX: 40,
-            clientY: 25,
-            preventDefault: vi.fn(),
-        } as unknown as MouseEvent;
+        const down = mousePointer({ clientX: 40, clientY: 25 });
 
-        eventManager.onMouseDown(mouseEvent, stateManager as never);
-        eventManager.onMouseMove(mouseEvent, stateManager as never);
-        eventManager.onMouseUp(mouseEvent, stateManager as never);
+        eventManager.onPointerDown(down, stateManager as never);
+        eventManager.onPointerMove(
+            mousePointer({ button: -1, clientX: 40, clientY: 25 }),
+            stateManager as never,
+        );
+        eventManager.onPointerUp(mousePointer({ clientX: 40, clientY: 25 }), stateManager as never);
 
+        expect(dispatch.mock.calls.map(([name]) => name)).toEqual([
+            'pointerDown',
+            'pointerMove',
+            'pointerUp',
+        ]);
         for (const [, event] of dispatch.mock.calls) {
             expect(event.detail.position).toEqual(new Vector(60, 40));
+            expect(event.detail.primary).toBe(true);
         }
         expect(canvas.focus).toHaveBeenCalledOnce();
-        expect(mouseEvent.preventDefault).toHaveBeenCalledOnce();
+        expect(down.preventDefault).toHaveBeenCalledOnce();
     });
 });
 
@@ -55,9 +71,10 @@ describe('EventManager mouse world positions', () => {
             getCurrent: () => ({ getWorld: () => world, dispatch: vi.fn() }),
         };
         const eventManager = new EventManager(context);
-        const mouseEvent = { clientX: 120, clientY: 60, preventDefault: vi.fn() };
-
-        eventManager.onMouseDown(mouseEvent as unknown as MouseEvent, stateManager as never);
+        eventManager.onPointerDown(
+            mousePointer({ clientX: 120, clientY: 60 }),
+            stateManager as never,
+        );
 
         expect(Mouse.mousePos).toEqual(new Vector(120, 60));
         expect(Mouse.lastClick).toEqual(new Vector(120, 60));
@@ -65,11 +82,7 @@ describe('EventManager mouse world positions', () => {
         expect(Mouse.lastWorldClick).toEqual(new Vector(60, 30));
     });
 
-    test.each([
-        ['onMouseEnter', 'mouseEnter', false],
-        ['onMouseOut', 'mouseOut', false],
-        ['onContextMenu', 'contextMenu', true],
-    ] as const)('%s dispatches %s with the mouse position', (method, eventName, prevented) => {
+    test('onContextMenu dispatches contextMenu with the mouse position', () => {
         const { context } = createCanvasMock(200, 100, {
             left: 0,
             top: 0,
@@ -80,18 +93,19 @@ describe('EventManager mouse world positions', () => {
         const stateManager = { getCurrent: () => ({ getWorld: () => undefined, dispatch }) };
         const mouseEvent = { clientX: 30, clientY: 40, preventDefault: vi.fn() };
 
-        new EventManager(context)[method](
+        new EventManager(context).onContextMenu(
             mouseEvent as unknown as MouseEvent,
             stateManager as never,
         );
 
         expect(dispatch).toHaveBeenCalledWith(
-            eventName,
+            'contextMenu',
             expect.objectContaining({
                 detail: expect.objectContaining({ position: new Vector(30, 40) }),
             }),
         );
-        expect(mouseEvent.preventDefault).toHaveBeenCalledTimes(prevented ? 1 : 0);
+        expect(Mouse.mousePos).toEqual(new Vector(30, 40));
+        expect(mouseEvent.preventDefault).toHaveBeenCalledOnce();
     });
 
     test('forwards the visibility changes and the keyboard control events', () => {
@@ -139,17 +153,19 @@ describe('EventManager DOM bridge', () => {
 
         expect(canvas.tabIndex).toBe(0);
         expect(canvas.focus).toHaveBeenCalledOnce();
-        expect(canvas.addEventListener).toHaveBeenCalledWith('mousedown', expect.any(Function));
+        expect(canvas.addEventListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
+        expect(canvas.addEventListener).toHaveBeenCalledWith('pointercancel', expect.any(Function));
+        // The fingers reach the canvas instead of scrolling or zooming the page
+        expect(canvas.style.touchAction).toBe('none');
         expect(canvas.addEventListener).toHaveBeenCalledWith('wheel', expect.any(Function));
         expect(documentAddEventListener).toHaveBeenCalledWith(
             'visibilitychange',
             expect.any(Function),
         );
         expect(documentAddEventListener).toHaveBeenCalledWith('keydown', expect.any(Function));
-        // The focus loss, and the buttons released out of the canvas
+        // The focus loss
         expect(canvas.addEventListener).toHaveBeenCalledWith('blur', expect.any(Function));
         expect(windowAddEventListener).toHaveBeenCalledWith('blur', expect.any(Function));
-        expect(windowAddEventListener).toHaveBeenCalledWith('mouseup', expect.any(Function));
 
         const wheelEvent = { preventDefault: vi.fn() } as unknown as WheelEvent;
         expect(new EventManager(context).onScroll(wheelEvent, stateManager as never)).toBe(true);
@@ -208,6 +224,15 @@ describe('EventManager held inputs', () => {
         }
     }
 
+    /** Pointer event of the mouse, as the DOM one. */
+    function mouse(type: string, init: PointerEventInit = {}) {
+        return Object.assign(new MouseEventDouble(type, init), {
+            pointerId: 1,
+            pointerType: 'mouse',
+            ...init,
+        }) as unknown as PointerEvent;
+    }
+
     /** A bridged event manager, its listeners by target and event name. */
     function bridge() {
         const { canvas, context } = createCanvasMock();
@@ -225,7 +250,8 @@ describe('EventManager held inputs', () => {
             visibilityState: 'visible',
         });
         vi.stubGlobal('window', { addEventListener: listen('window') });
-        vi.stubGlobal('MouseEvent', MouseEventDouble);
+        // The buttons held are released with pointer events of their own
+        vi.stubGlobal('PointerEvent', MouseEventDouble);
 
         const dispatch = vi.fn();
         const stateManager = { getCurrent: () => ({ getWorld: () => undefined, dispatch }) };
@@ -241,17 +267,21 @@ describe('EventManager held inputs', () => {
         Keyboard.registerControl('held-test', new Control('ArrowUp'));
         const key = { code: 'ArrowUp', key: 'ArrowUp', preventDefault: vi.fn() };
         fire('document:keydown', key);
-        fire('canvas:mousedown', new MouseEventDouble('mousedown', { button: 2, clientX: 40 }));
+        fire('canvas:pointerdown', mouse('pointerdown', { button: 2, buttons: 2, clientX: 40 }));
         expect(Keyboard.isDown('held-test')).toBe(true);
         dispatch.mockClear();
 
         fire('canvas:blur', {});
 
         expect(Keyboard.isDown('held-test')).toBe(false);
-        expect(names()).toEqual(['keyboardUp', 'mouseUp']);
+        expect(names()).toEqual(['keyboardUp', 'pointerUp']);
         // At the last position of the mouse, with the button held
-        const mouseUp = dispatch.mock.calls[1][1].detail.mouseEvent;
-        expect([mouseUp.button, mouseUp.clientX]).toEqual([2, 40]);
+        const pointerUp = dispatch.mock.calls[1][1].detail.pointerEvent;
+        expect([pointerUp.button, pointerUp.clientX, pointerUp.pointerType]).toEqual([
+            2,
+            40,
+            'mouse',
+        ]);
 
         // Nothing is held anymore: the window losing the focus next releases nothing
         dispatch.mockClear();
@@ -262,28 +292,65 @@ describe('EventManager held inputs', () => {
 
     test('releases the inputs held when the page is hidden, before telling the states', () => {
         const { dispatch, fire, names } = bridge();
-        fire('canvas:mousedown', new MouseEventDouble('mousedown'));
+        fire('canvas:pointerdown', mouse('pointerdown', { buttons: 1 }));
         dispatch.mockClear();
         (document as { visibilityState: string }).visibilityState = 'hidden';
 
         fire('document:visibilitychange', {});
 
-        expect(names()).toEqual(['mouseUp', 'visibilityChange']);
+        expect(names()).toEqual(['pointerUp', 'visibilityChange']);
     });
 
-    test('releases a mouse button pressed on the canvas wherever it is released', () => {
+    test('capture the mouse pressed on the canvas, released wherever it is released', () => {
         const { canvas, dispatch, fire, names } = bridge();
-        fire('canvas:mousedown', new MouseEventDouble('mousedown'));
-        dispatch.mockClear();
+        fire('canvas:pointerenter', mouse('pointerenter', { button: -1 }));
+        fire('canvas:pointerdown', mouse('pointerdown', { buttons: 1 }));
+        expect(canvas.setPointerCapture).toHaveBeenCalledWith(1);
+        // Captured: released out of the canvas, the release still reaches it, once
+        fire('canvas:pointerup', mouse('pointerup', { buttons: 0, clientX: 500 }));
+        fire('canvas:lostpointercapture', mouse('lostpointercapture', { button: -1 }));
+        fire('canvas:pointerleave', mouse('pointerleave', { button: -1 }));
 
-        // Released over the page: once, the canvas listener not seeing it
-        fire('window:mouseup', { ...new MouseEventDouble('mouseup'), target: {} });
-        // A button released over the page without being pressed on the canvas is not
-        fire('window:mouseup', { ...new MouseEventDouble('mouseup', { button: 1 }), target: {} });
-        // Released over the canvas: seen by its own listener, not twice
-        fire('canvas:mousedown', new MouseEventDouble('mousedown'));
-        fire('window:mouseup', { ...new MouseEventDouble('mouseup'), target: canvas });
+        expect(names()).toEqual(['pointerEnter', 'pointerDown', 'pointerUp', 'pointerLeave']);
+        expect(dispatch.mock.calls[2][1].detail.pointerEvent.clientX).toBe(500);
+    });
 
-        expect(names()).toEqual(['mouseUp', 'mouseDown']);
+    test('press and release each mouse button, the others changing the buttons on a move', () => {
+        const { dispatch, fire, names } = bridge();
+        fire('canvas:pointerdown', mouse('pointerdown', { button: 0, buttons: 1 }));
+        fire('canvas:pointermove', mouse('pointermove', { button: -1, buttons: 1 }));
+        // The right button pressed then released while the main one is held
+        fire('canvas:pointermove', mouse('pointermove', { button: 2, buttons: 3 }));
+        fire('canvas:pointermove', mouse('pointermove', { button: 2, buttons: 1 }));
+        fire('canvas:pointerup', mouse('pointerup', { button: 0, buttons: 0 }));
+
+        expect(names()).toEqual([
+            'pointerDown',
+            'pointerMove',
+            'pointerDown',
+            'pointerUp',
+            'pointerUp',
+        ]);
+        const buttons = dispatch.mock.calls.map(([, e]) => e.detail.pointerEvent.button);
+        expect(buttons).toEqual([0, -1, 2, 2, 0]);
+    });
+
+    test('release the mouse buttons held when their pointer is cancelled or loses its capture', () => {
+        const { fire, names } = bridge();
+        fire('canvas:pointerdown', mouse('pointerdown', { buttons: 1 }));
+        fire('canvas:lostpointercapture', mouse('lostpointercapture', { button: -1 }));
+        // Nothing held anymore
+        fire('canvas:pointercancel', mouse('pointercancel', { button: -1 }));
+
+        expect(names()).toEqual(['pointerDown', 'pointerUp']);
+    });
+
+    test('leave the hovering to the mouse and the pen, a finger entering when touching', () => {
+        const { fire, names } = bridge();
+        const touch = { pointerId: 5, pointerType: 'touch', button: -1, clientX: 0, clientY: 0 };
+        fire('canvas:pointerenter', { ...touch, type: 'pointerenter' });
+        fire('canvas:pointerleave', { ...touch, type: 'pointerleave' });
+
+        expect(names()).toEqual([]);
     });
 });

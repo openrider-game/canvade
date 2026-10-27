@@ -5,7 +5,7 @@ import { Control } from '../../src/canvade/event/keyboard/control';
 import { KEYZ } from '../../src/canvade/event/keyboard/key-codes';
 import { Keyboard } from '../../src/canvade/event/keyboard/keyboard';
 import { TouchGestures } from '../../src/canvade/event/touch/touch-gestures';
-import { GameMouseEvent, GameTouchEvent } from '../../src/canvade/event/types/dom-events';
+import { GamePointerEvent } from '../../src/canvade/event/types/dom-events';
 import { Layer } from '../../src/canvade/state/layer/layer';
 import { UIStructureDefinition } from '../../src/canvade/ui/ui-parser';
 import { createCanvasMock } from '../helpers/canvas';
@@ -14,36 +14,30 @@ class TestLayer extends Layer {
     initLayer(): void {}
 }
 
-/** Mouse events of the browser, missing from Node, keeping their options as properties. */
-class MouseEventDouble extends Event {
-    public constructor(type: string, init: Record<string, unknown> = {}) {
-        super(type);
-        Object.assign(this, init);
-    }
-}
-
-/** DOM touch event with the given changed touches, as `[id, clientX, clientY]`. */
-function domTouches(...touches: Array<[number, number, number]>): TouchEvent {
+/** Pointer event of a finger, by its pointer id, at a position on the page in CSS pixels. */
+function finger(pointerId: number, clientX: number, clientY: number, type = 'pointerdown') {
     return {
-        preventDefault: vi.fn(),
+        type,
+        pointerId,
+        pointerType: 'touch',
+        clientX,
+        clientY,
+        button: 0,
+        buttons: 1,
         shiftKey: false,
-        changedTouches: touches.map(([identifier, clientX, clientY]) => ({
-            identifier,
-            clientX,
-            clientY,
-        })),
-    } as unknown as TouchEvent;
+        preventDefault: vi.fn(),
+    } as unknown as PointerEvent;
 }
 
-/** Touch event of the game, at a position in canvas pixels. */
+/** Pointer event of the game of a finger, at a position in canvas pixels. */
 function touchEvent(name: string, id: number, x: number, y: number) {
-    return new CustomEvent<GameTouchEvent>(name, {
+    return new CustomEvent<GamePointerEvent>(name, {
         detail: {
             name,
             consumed: false,
-            touchEvent: domTouches([id, x, y]),
-            id,
+            pointerEvent: finger(id, x, y),
             position: new Vector(x, y),
+            primary: false,
         },
     });
 }
@@ -56,115 +50,167 @@ describe('Touch gestures', () => {
     function gestures() {
         const output: string[] = [];
         const touch = new TouchGestures({
-            mouse: (type, point) => output.push(`${type} ${point.clientX}`),
+            release: (event) => output.push(`release ${event.pointerId} ${event.clientX}`),
             pinch: (name, center, scale) =>
                 output.push(`${name} ${center.clientX} ${scale.toFixed(2)}`),
         });
-        const event = domTouches();
         return {
             output,
-            start: (id: number, x: number) => touch.start(id, { clientX: x, clientY: 0 }, event),
-            move: (id: number, x: number) => touch.move(id, { clientX: x, clientY: 0 }, event),
-            end: (id: number, x: number) => touch.end(id, { clientX: x, clientY: 0 }, event),
+            idle: () => touch.idle,
+            start: (id: number, x: number) => touch.start(finger(id, x, 0)),
+            move: (id: number, x: number) => touch.move(finger(id, x, 0, 'pointermove')),
+            end: (id: number, x: number) => touch.end(finger(id, x, 0, 'pointerup')),
         };
     }
 
-    test('turn a single finger into the main mouse button', () => {
-        const { output, start, move, end } = gestures();
+    test('let a single finger act alone until lifted', () => {
+        const { output, idle, start, move, end } = gestures();
 
+        expect(idle()).toBe(true);
         start(1, 10);
         move(1, 20);
+        expect(idle()).toBe(false);
         end(1, 20);
 
-        expect(output).toEqual(['mousedown 10', 'mousemove 20', 'mouseup 20']);
+        expect(idle()).toBe(true);
+        expect(output).toEqual([]);
     });
 
-    test('pinch with two fingers, a second finger ending the mouse press', () => {
-        const { output, start, move, end } = gestures();
+    test('pinch with two fingers, a second finger releasing the first one', () => {
+        const { output, idle, start, move, end } = gestures();
 
         start(1, 100);
+        move(1, 110);
         start(2, 200);
-        move(2, 300);
+        move(2, 310);
         // A third finger is ignored
         start(3, 500);
         move(3, 600);
-        end(1, 100);
+        end(1, 110);
         // The finger left does nothing until lifted
         move(2, 400);
         end(2, 400);
         start(4, 50);
 
         expect(output).toEqual([
-            'mousedown 100',
-            'mouseup 100',
-            'pinchStart 150 1.00',
-            'pinchMove 200 2.00',
-            'pinchEnd 200 2.00',
-            'mousedown 50',
+            // At its last position
+            'release 1 110',
+            'pinchStart 155 1.00',
+            'pinchMove 210 2.22',
+            'pinchEnd 210 2.22',
         ]);
+        expect(idle()).toBe(false);
     });
 });
 
 describe('EventManager touch input', () => {
-    function bridge(consume: (name: string) => boolean = () => false) {
-        vi.stubGlobal('MouseEvent', MouseEventDouble);
+    function bridge(consume: (detail: GamePointerEvent, name: string) => boolean = () => false) {
         const { canvas, context } = createCanvasMock();
-        const dispatched: Array<{ name: string; detail: GameTouchEvent & GameMouseEvent }> = [];
+        const dispatched: Array<{ name: string; detail: GamePointerEvent }> = [];
         const dispatch = vi.fn((name: string, event: CustomEvent) => {
             dispatched.push({ name, detail: event.detail });
-            if (consume(name)) {
+            if (consume(event.detail, name)) {
                 event.detail.consumed = true;
             }
         });
         const stateManager = { getCurrent: () => ({ getWorld: () => undefined, dispatch }) };
-        return { canvas, eventManager: new EventManager(context), stateManager, dispatched };
+        /** The pointer events dispatched, as `name id primary`. */
+        const pointers = () =>
+            dispatched
+                .filter(({ name }) => name.startsWith('pointer'))
+                .map(
+                    ({ name, detail }) =>
+                        `${name} ${detail.pointerEvent.pointerId} ${detail.primary}`,
+                );
+        return {
+            canvas,
+            eventManager: new EventManager(context),
+            stateManager,
+            dispatched,
+            pointers,
+        };
     }
 
-    test('dispatches each touch in canvas pixels, a touch left untaken acting as the mouse', () => {
-        const { canvas, eventManager, stateManager, dispatched } = bridge();
-        const start = domTouches([7, 40, 25]);
+    test('dispatches a lone finger as the primary pointer, in canvas pixels', () => {
+        const { canvas, eventManager, stateManager, dispatched, pointers } = bridge();
+        const start = finger(7, 40, 25);
 
-        eventManager.onTouchStart(start, stateManager as never);
-        eventManager.onTouchEnd(domTouches([7, 40, 25]), stateManager as never);
+        eventManager.onPointerDown(start, stateManager as never);
+        eventManager.onPointerMove(finger(7, 50, 25, 'pointermove'), stateManager as never);
+        eventManager.onPointerUp(finger(7, 50, 25, 'pointerup'), stateManager as never);
 
         expect(start.preventDefault).toHaveBeenCalled();
         expect(canvas.focus).toHaveBeenCalled();
-        expect(dispatched.map(({ name }) => name)).toEqual([
-            'touchStart',
-            'mouseEnter',
-            'mouseMove',
-            'mouseDown',
-            'touchEnd',
-            'mouseUp',
-            'mouseOut',
+        expect(pointers()).toEqual([
+            'pointerEnter 7 true',
+            'pointerDown 7 true',
+            'pointerMove 7 true',
+            'pointerUp 7 true',
+            'pointerLeave 7 true',
         ]);
         // 100x50 CSS pixels at (10, 5) for a canvas of 200x100
-        expect(dispatched[0].detail.id).toBe(7);
-        expect(dispatched[0].detail.position).toEqual(new Vector(60, 40));
-        expect(dispatched[3].detail.position).toEqual(new Vector(60, 40));
-        expect(dispatched[3].detail.mouseEvent.button).toBe(0);
+        expect(dispatched[1].detail.position).toEqual(new Vector(60, 40));
+        expect(dispatched[1].detail.pointerEvent).toBe(start);
     });
 
-    test('leaves the touches taken by a layer to it, and pinches with two fingers', () => {
-        const { eventManager, stateManager, dispatched } = bridge(
-            (name) => name === 'touchStart' && dispatched.length === 1,
+    test('leaves the fingers taken by a layer to it, and pinches with two fingers', () => {
+        const { eventManager, stateManager, dispatched, pointers } = bridge(
+            (detail, name) => name === 'pointerDown' && detail.pointerEvent.pointerId === 1,
         );
 
-        // Taken by a layer
-        eventManager.onTouchStart(domTouches([1, 20, 10]), stateManager as never);
-        expect(dispatched.map(({ name }) => name)).toEqual(['touchStart']);
+        // Taken by a layer: the game does not act on it
+        eventManager.onPointerDown(finger(1, 20, 10), stateManager as never);
+        eventManager.onPointerMove(finger(1, 25, 10, 'pointermove'), stateManager as never);
+        // Two untaken fingers: the first one acts alone until the second one joins it
+        eventManager.onPointerDown(finger(2, 30, 20), stateManager as never);
+        eventManager.onPointerDown(finger(3, 50, 20), stateManager as never);
+        eventManager.onPointerMove(finger(3, 70, 20, 'pointermove'), stateManager as never);
+        eventManager.onPointerUp(finger(2, 30, 20, 'pointerup'), stateManager as never);
 
-        // Two untaken fingers
-        eventManager.onTouchStart(domTouches([2, 30, 20], [3, 50, 20]), stateManager as never);
-        eventManager.onTouchMove(domTouches([3, 70, 20]), stateManager as never);
+        expect(pointers()).toEqual([
+            'pointerEnter 1 true',
+            'pointerDown 1 true',
+            'pointerLeave 1 true',
+            'pointerMove 1 false',
+            'pointerEnter 2 true',
+            'pointerDown 2 true',
+            'pointerDown 3 false',
+            'pointerUp 2 true',
+            'pointerLeave 2 true',
+            'pointerMove 3 false',
+            'pointerUp 2 false',
+        ]);
         const names = dispatched.map(({ name }) => name);
         expect(names.filter((name) => name.startsWith('pinch'))).toEqual([
             'pinchStart',
             'pinchMove',
+            'pinchEnd',
         ]);
-        const pinch = dispatched.at(-1)?.detail as unknown as { center: Vector; scale: number };
+        const pinch = dispatched.find(({ name }) => name === 'pinchMove')?.detail as unknown as {
+            center: Vector;
+            scale: number;
+        };
         expect(pinch.scale).toBe(2);
         expect(pinch.center).toEqual(new Vector(80, 30));
+    });
+});
+
+describe('Fingers cancelled', () => {
+    test('end as when lifted, the capture they lose then being ignored', () => {
+        const { context } = createCanvasMock();
+        const dispatch = vi.fn();
+        const stateManager = { getCurrent: () => ({ getWorld: () => undefined, dispatch }) };
+        const eventManager = new EventManager(context);
+
+        eventManager.onPointerDown(finger(4, 20, 10), stateManager as never);
+        eventManager.onPointerCancel(finger(4, 20, 10, 'pointercancel'), stateManager as never);
+        eventManager.onPointerCancel(
+            finger(4, 20, 10, 'lostpointercapture'),
+            stateManager as never,
+        );
+
+        const names = dispatch.mock.calls.map(([name]) => name);
+        expect(names).toEqual(['pointerEnter', 'pointerDown', 'pointerUp', 'pointerLeave']);
     });
 });
 
@@ -197,13 +243,13 @@ describe('UI elements under the fingers', () => {
     });
 
     test('press an element for each finger, sliding from one to the next', () => {
-        layer.dispatch('touchStart', touchEvent('touchStart', 1, 10, 10));
-        layer.dispatch('touchStart', touchEvent('touchStart', 2, 70, 10));
+        layer.dispatch('pointerDown', touchEvent('pointerDown', 1, 10, 10));
+        layer.dispatch('pointerDown', touchEvent('pointerDown', 2, 70, 10));
         // Both fingers on the right button, then the first one off the buttons
-        layer.dispatch('touchMove', touchEvent('touchMove', 1, 80, 20));
-        layer.dispatch('touchMove', touchEvent('touchMove', 1, 150, 80));
-        layer.dispatch('touchEnd', touchEvent('touchEnd', 1, 150, 80));
-        layer.dispatch('touchEnd', touchEvent('touchEnd', 2, 70, 10));
+        layer.dispatch('pointerMove', touchEvent('pointerMove', 1, 80, 20));
+        layer.dispatch('pointerMove', touchEvent('pointerMove', 1, 150, 80));
+        layer.dispatch('pointerUp', touchEvent('pointerUp', 1, 150, 80));
+        layer.dispatch('pointerUp', touchEvent('pointerUp', 2, 70, 10));
 
         expect(log).toEqual([
             'press left',
@@ -216,12 +262,12 @@ describe('UI elements under the fingers', () => {
     });
 
     test('consume the touches starting over an element only', () => {
-        const over = touchEvent('touchStart', 1, 10, 10);
-        const outside = touchEvent('touchStart', 2, 150, 80);
-        layer.dispatch('touchStart', over);
-        layer.dispatch('touchStart', outside);
-        const move = touchEvent('touchMove', 1, 150, 80);
-        layer.dispatch('touchMove', move);
+        const over = touchEvent('pointerDown', 1, 10, 10);
+        const outside = touchEvent('pointerDown', 2, 150, 80);
+        layer.dispatch('pointerDown', over);
+        layer.dispatch('pointerDown', outside);
+        const move = touchEvent('pointerMove', 1, 150, 80);
+        layer.dispatch('pointerMove', move);
 
         expect(over.detail.consumed).toBe(true);
         expect(outside.detail.consumed).toBe(false);
@@ -229,9 +275,9 @@ describe('UI elements under the fingers', () => {
     });
 
     test('keep the elements pressed through a new tree, the new ones taking over', () => {
-        layer.dispatch('touchStart', touchEvent('touchStart', 1, 10, 10));
+        layer.dispatch('pointerDown', touchEvent('pointerDown', 1, 10, 10));
         buildUI(' (new)');
-        layer.dispatch('touchEnd', touchEvent('touchEnd', 1, 10, 10));
+        layer.dispatch('pointerUp', touchEvent('pointerUp', 1, 10, 10));
 
         expect(log).toEqual([
             'press left',
@@ -245,16 +291,17 @@ describe('UI elements under the fingers', () => {
 
     test('press an element with the main mouse button too', () => {
         const mouse = (name: string) =>
-            new CustomEvent<GameMouseEvent>(name, {
+            new CustomEvent<GamePointerEvent>(name, {
                 detail: {
                     name,
                     consumed: false,
-                    mouseEvent: { button: 0 } as MouseEvent,
+                    pointerEvent: { pointerId: 1, pointerType: 'mouse', button: 0 } as PointerEvent,
                     position: new Vector(70, 10),
+                    primary: true,
                 },
             });
-        layer.dispatch('mouseDown', mouse('mouseDown'));
-        layer.dispatch('mouseUp', mouse('mouseUp'));
+        layer.dispatch('pointerDown', mouse('pointerDown'));
+        layer.dispatch('pointerUp', mouse('pointerUp'));
 
         expect(log).toEqual(['press right', 'click right', 'release right']);
     });

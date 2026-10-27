@@ -57,8 +57,9 @@ It provides:
 
 - a fixed timestep game loop, separating the physics updates from the rendering
 - states stacked by a state manager, each made of layers receiving the input from the top layer down
-- keyboard controls and mouse positions, in canvas pixels and in world units
-- touch screens: each touch dispatched as an event, a single finger acting as the mouse and two fingers pinching, so that a game made for the mouse works with the fingers
+- keyboard controls and pointer positions, in canvas pixels and in world units
+- pointer events for the mouse, the pen and the fingers alike, the game acting on a single primary pointer and two fingers pinching, so that a game made for the mouse works with the fingers
+- inputs that never stay stuck: a press on the canvas is released wherever it is released, and every input held is released when the canvas loses the focus
 - a world with a camera and a zoom, and the conversions between world and canvas coordinates
 - a declarative canvas UI: elements described by a structure and styled by CSS-like selectors, with relative units, alignment, absolute positioning, interaction states and animations, scaled to keep its size on high density screens
 - built-in UI elements: containers, buttons, texts, images and text inputs
@@ -149,7 +150,7 @@ The game loop dispatches these events to the current state and its layers:
 
 The canvas is opaque (its context has no alpha channel, which spares the browser blending it with the page): each frame starts by filling it with `Display.backgroundColor`, white by default, rather than clearing it. Pass a `backgroundColor` to the game options to change it.
 
-States also receive `enter` and `leave` when pushed or popped, and the DOM events of the canvas (`mouseDown`, `mouseUp`, `mouseMove`, `scroll`, `contextMenu`, `touchStart`, `pinchMove`, `keyDown`, `keyboardDown`...): the game listens to the DOM, the states and layers subscribe to its events.
+States also receive `enter` and `leave` when pushed or popped, and the DOM events of the canvas (`pointerDown`, `pointerUp`, `pointerMove`, `scroll`, `contextMenu`, `pinchMove`, `keyDown`, `keyboardDown`...): the game listens to the DOM, the states and layers subscribe to its events.
 Input events go from the top layer down, and stop as soon as a layer sets `event.detail.consumed`.
 
 States are created when added to the game, before being pushed: since `initState` and `initLayers` run in the `State` constructor, they must not rely on the fields of the subclass. The same goes for `initLayer`, run in the `Layer` constructor.
@@ -166,7 +167,7 @@ this.manager.shared.set("score", 100);
 this.manager.push("gameOver");
 ```
 
-### Keyboard and mouse
+### Keyboard and pointers
 
 Keyboard controls are registered by name, and can be polled or listened to:
 
@@ -188,20 +189,27 @@ A control can be bound to another key at any time by registering it again, a hel
 
 A control can be held down without its key, e.g. by an on-screen button: `Keyboard.press("jump")` and `Keyboard.release("jump")` dispatch `keyboardDown` and `keyboardUp` as the key would, their `keyboardEvent` being `null`.
 
-`Mouse.mousePos` holds the mouse position in canvas pixels. When the current state has a world (`state.setWorld(world)`), `Mouse.worldPos` holds it in world units: a `World` has a `camera` and a `zoomFactor`, and `WorldVector` converts positions between world units and canvas pixels.
+The canvas listens to the pointer events of the browser, and dispatches the mouse, the pen and each finger alike: `pointerDown`, `pointerMove` and `pointerUp`, with the `pointerEvent` of the browser (its `pointerId`, its `pointerType`, the `button` pressed or released...), the `position` in canvas pixels, and whether the pointer is `primary`. The mouse dispatches `pointerDown` and `pointerUp` for each of its buttons, and `pointerEnter` and `pointerLeave` as it enters and leaves the canvas. A pointer pressed on the canvas is captured, so that it is released wherever it is released, e.g. a drag ending out of the canvas. When the canvas loses the focus (another element or window focused, the page hidden, a dialog opened), every keyboard control and mouse button held is released, with their `keyboardUp` and `pointerUp` events.
+
+The game acts on the primary pointer: the mouse, the pen, or a single finger. The others are for the UI, e.g. a finger holding an on-screen button while another one drags the view:
+
+```ts
+this.subscribe("pointerDown", (e) => {
+    if (e.detail.primary) startDrawing(e.detail.position, e.detail.pointerEvent.button);
+});
+```
+
+`Mouse.mousePos` holds the position of the primary pointer in canvas pixels. When the current state has a world (`state.setWorld(world)`), `Mouse.worldPos` holds it in world units: a `World` has a `camera` and a `zoomFactor`, and `WorldVector` converts positions between world units and canvas pixels.
 
 ### Touch screens
 
-Each touch of the canvas is dispatched as `touchStart`, `touchMove` and `touchEnd`, with its `id` and its `position` in canvas pixels, from the top layer down. The touches neither scroll nor zoom the page. A touch no layer consumes when it starts becomes a gesture:
+The fingers neither scroll nor zoom the page (`touch-action: none` on the canvas), and a finger cancelled by the browser ends with `pointerUp` too. A finger is primary when it touches while no other finger acts: it enters the canvas (`pointerEnter`) before its `pointerDown` and leaves it (`pointerLeave`) after its `pointerUp`, as the mouse would, so that a game made for the mouse works with it. A layer consuming its `pointerDown`, e.g. the UI under it (see below), takes it: it leaves the canvas right away, and is no longer primary.
 
-- a single finger acts as the mouse: `mouseEnter`, `mouseMove` and `mouseDown` with the main button when it starts, `mouseMove` as it moves, `mouseUp` and `mouseOut` when lifted;
-- two fingers pinch: `pinchStart`, `pinchMove` and `pinchEnd`, with the `center` between them in canvas pixels and their distance as a `scale` of the one at the start, e.g. to drag and zoom a world. A second finger ends the mouse press of the first one.
+Two fingers no layer takes pinch: `pinchStart`, `pinchMove` and `pinchEnd`, with the `center` between them in canvas pixels and their distance as a `scale` of the one at the start, e.g. to drag and zoom a world. The second finger ends the primary one, with its `pointerUp` and `pointerLeave`.
 
 ```ts
 this.subscribe("pinchMove", (e) => console.log(e.detail.center, e.detail.scale));
 ```
-
-The UI takes the touches starting over its elements (see below), so that tapping a button never moves the mouse of the game.
 
 ### User interface
 

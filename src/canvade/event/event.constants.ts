@@ -1,19 +1,17 @@
 /**
- * DOM events bridged by the event manager: mouse and touch events are listened to on the
- * canvas, visibility and key events on the document, the focus loss on the canvas and the
+ * DOM events bridged by the event manager: pointer, wheel and context menu events are listened to
+ * on the canvas, visibility and key events on the document, the focus loss on the canvas and the
  * window.
  */
-export const MOUSE_DOWN_EVENT = 'mousedown',
-    MOUSE_UP_EVENT = 'mouseup',
-    MOUSE_MOVE_EVENT = 'mousemove',
-    WHEEL_EVENT = 'wheel',
-    MOUSE_ENTER_EVENT = 'mouseenter',
-    MOUSE_OUT_EVENT = 'mouseout',
+export const WHEEL_EVENT = 'wheel',
     CONTEXT_MENU_EVENT = 'contextmenu',
-    TOUCH_START_EVENT = 'touchstart',
-    TOUCH_MOVE_EVENT = 'touchmove',
-    TOUCH_END_EVENT = 'touchend',
-    TOUCH_CANCEL_EVENT = 'touchcancel',
+    POINTER_DOWN_EVENT = 'pointerdown',
+    POINTER_MOVE_EVENT = 'pointermove',
+    POINTER_UP_EVENT = 'pointerup',
+    POINTER_CANCEL_EVENT = 'pointercancel',
+    POINTER_ENTER_EVENT = 'pointerenter',
+    POINTER_LEAVE_EVENT = 'pointerleave',
+    LOST_POINTER_CAPTURE_EVENT = 'lostpointercapture',
     VISIBILITY_CHANGE_EVENT = 'visibilitychange',
     BLUR_EVENT = 'blur',
     KEY_DOWN_EVENT = 'keydown',

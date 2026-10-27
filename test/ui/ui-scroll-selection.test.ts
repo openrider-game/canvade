@@ -4,7 +4,7 @@ import { EventManager } from '../../src/canvade/event/event-manager';
 import {
     GameClipboardEvent,
     GameKeyboardEvent,
-    GameMouseEvent,
+    GamePointerEvent,
     GameWheelEvent,
 } from '../../src/canvade/event/types/dom-events';
 import { Layer } from '../../src/canvade/state/layer/layer';
@@ -35,15 +35,22 @@ function createLayer(structure: UIStructureDefinition, styles = {}) {
 }
 
 function mouse(layer: Layer, name: string, x: number, y: number, init: Partial<MouseEvent> = {}) {
-    const event = new CustomEvent<GameMouseEvent>(name, {
+    const event = new CustomEvent<GamePointerEvent>(name, {
         detail: {
             name,
             consumed: false,
-            mouseEvent: { button: 0, shiftKey: false, ...init } as MouseEvent,
+            pointerEvent: {
+                pointerId: 1,
+                pointerType: 'mouse',
+                button: 0,
+                shiftKey: false,
+                ...init,
+            } as PointerEvent,
+            primary: true,
             position: new Vector(x, y),
         },
     });
-    layer.dispatch(name as 'mouseDown', event);
+    layer.dispatch(name as 'pointerDown', event);
     return event;
 }
 
@@ -154,16 +161,16 @@ describe('Scrolling containers', () => {
         render();
 
         // The thumb is 60 * 60 / 100 = 36 pixels high: 24 pixels of free track for 40 of scroll
-        mouse(layer, 'mouseDown', 96, 10);
-        mouse(layer, 'mouseMove', 300, 22);
+        mouse(layer, 'pointerDown', 96, 10);
+        mouse(layer, 'pointerMove', 300, 22);
         expect(list.scrollTop).toBe(20);
-        mouse(layer, 'mouseUp', 300, 22);
+        mouse(layer, 'pointerUp', 300, 22);
         render();
 
         // A click on the track centers the thumb under the mouse
-        mouse(layer, 'mouseDown', 96, 59);
+        mouse(layer, 'pointerDown', 96, 59);
         expect(list.scrollTop).toBe(40);
-        mouse(layer, 'mouseUp', 96, 59);
+        mouse(layer, 'pointerUp', 96, 59);
     });
 
     test('do not scroll children that fit, nor hidden overflows', () => {
@@ -219,8 +226,8 @@ describe('Input selection and clipboard', () => {
             '.field': { width: 200, height: 30, value: 'hello world', ...styles },
         });
         const input = created.root.children[0] as UIInput;
-        mouse(created.layer, 'mouseDown', 6 + 7 * 11, 10);
-        mouse(created.layer, 'mouseUp', 6 + 7 * 11, 10);
+        mouse(created.layer, 'pointerDown', 6 + 7 * 11, 10);
+        mouse(created.layer, 'pointerUp', 6 + 7 * 11, 10);
         return { ...created, input };
     }
 
@@ -269,15 +276,15 @@ describe('Input selection and clipboard', () => {
         render();
 
         // From the start of "world" to the end
-        mouse(layer, 'mouseDown', 6 + 7 * 6, 10);
-        mouse(layer, 'mouseMove', 300, 10);
-        mouse(layer, 'mouseUp', 300, 10);
+        mouse(layer, 'pointerDown', 6 + 7 * 6, 10);
+        mouse(layer, 'pointerMove', 300, 10);
+        mouse(layer, 'pointerUp', 300, 10);
         expect(input.selectedText).toBe('world');
 
-        mouse(layer, 'mouseDown', 6, 10);
-        mouse(layer, 'mouseUp', 6, 10);
-        mouse(layer, 'mouseDown', 6 + 7 * 5, 10, { shiftKey: true });
-        mouse(layer, 'mouseUp', 6 + 7 * 5, 10, { shiftKey: true });
+        mouse(layer, 'pointerDown', 6, 10);
+        mouse(layer, 'pointerUp', 6, 10);
+        mouse(layer, 'pointerDown', 6 + 7 * 5, 10, { shiftKey: true });
+        mouse(layer, 'pointerUp', 6 + 7 * 5, 10, { shiftKey: true });
         expect(input.selectedText).toBe('hello');
     });
 

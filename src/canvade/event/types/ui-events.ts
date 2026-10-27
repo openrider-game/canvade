@@ -8,7 +8,7 @@ import { GameRenderEvent } from './game-loop-events';
  * `inputEvent` the mouse or touch event releasing the element.
  */
 export type GameClickEvent = GameEvent & {
-    inputEvent: MouseEvent | TouchEvent;
+    inputEvent: MouseEvent;
     position: Vector;
     target: UIElement;
 };

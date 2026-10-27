@@ -9,12 +9,9 @@ type LayerEvents = DOMEvents & StateEvents & GameLoopEvents;
 
 /** Input events given to the UI of a layer, unless a receiver of the layer consumed them. */
 type UIInputEvent =
-    | 'mouseDown'
-    | 'mouseMove'
-    | 'mouseUp'
-    | 'touchStart'
-    | 'touchMove'
-    | 'touchEnd'
+    | 'pointerDown'
+    | 'pointerMove'
+    | 'pointerUp'
     | 'scroll'
     | 'keyDown'
     | 'copy'
@@ -25,8 +22,8 @@ type UIInputEvent =
  * A layer of a `State`, receiving the events forwarded by its state.
  *
  * Subclasses subscribe to the events they need in {@link Layer.initLayer}. Each layer owns a
- * {@link UIManager}, which receives `update`, `render`, `mouseDown`, `mouseMove`, `mouseUp`,
- * `mouseOut`, the touch events, `scroll`, `keyDown`, `copy`, `cut` and `paste` after the
+ * {@link UIManager}, which receives `update`, `render`, the pointer events but `pointerEnter`,
+ * `scroll`, `keyDown`, `copy`, `cut` and `paste` after the
  * receivers subscribed in `initLayer`: the UI is drawn over the layer content, and a receiver can
  * set the `consumed` flag of an input event to hide it from the UI. When the UI handles an input
  * event, it consumes it, so the layers below do not receive it.
@@ -41,14 +38,11 @@ export abstract class Layer extends EventEmitter<LayerEvents> {
         this.initLayer();
         this.subscribe('update', (e) => this.uiRenderer.dispatch('update', e));
         this.subscribe('render', (e) => this.uiRenderer.dispatch('render', e));
-        // Whether consumed or not: the mouse left the canvas for every layer
-        this.subscribe('mouseOut', (e) => this.uiRenderer.dispatch('mouseOut', e));
-        this.subscribe('mouseDown', (e) => this.forwardToUI('mouseDown', e));
-        this.subscribe('mouseMove', (e) => this.forwardToUI('mouseMove', e));
-        this.subscribe('mouseUp', (e) => this.forwardToUI('mouseUp', e));
-        this.subscribe('touchStart', (e) => this.forwardToUI('touchStart', e));
-        this.subscribe('touchMove', (e) => this.forwardToUI('touchMove', e));
-        this.subscribe('touchEnd', (e) => this.forwardToUI('touchEnd', e));
+        // Whether consumed or not: the pointer left the canvas for every layer
+        this.subscribe('pointerLeave', (e) => this.uiRenderer.dispatch('pointerLeave', e));
+        this.subscribe('pointerDown', (e) => this.forwardToUI('pointerDown', e));
+        this.subscribe('pointerMove', (e) => this.forwardToUI('pointerMove', e));
+        this.subscribe('pointerUp', (e) => this.forwardToUI('pointerUp', e));
         this.subscribe('scroll', (e) => this.forwardToUI('scroll', e));
         this.subscribe('keyDown', (e) => this.forwardToUI('keyDown', e));
         this.subscribe('copy', (e) => this.forwardToUI('copy', e));

@@ -5,7 +5,7 @@ import { EventManager } from '../../src/canvade/event/event-manager';
 import { Control, NONE } from '../../src/canvade/event/keyboard/control';
 import { KEYE } from '../../src/canvade/event/keyboard/key-codes';
 import { Keyboard } from '../../src/canvade/event/keyboard/keyboard';
-import { GameKeyboardEvent, GameMouseEvent } from '../../src/canvade/event/types/dom-events';
+import { GameKeyboardEvent, GamePointerEvent } from '../../src/canvade/event/types/dom-events';
 import { Layer } from '../../src/canvade/state/layer/layer';
 import { State } from '../../src/canvade/state/state';
 import { StateManager } from '../../src/canvade/state/state-manager';
@@ -27,11 +27,12 @@ afterEach(() => {
 });
 
 function mouseEvent(name: string, x: number, y: number, button = 0) {
-    return new CustomEvent<GameMouseEvent>(name, {
+    return new CustomEvent<GamePointerEvent>(name, {
         detail: {
             name,
             consumed: false,
-            mouseEvent: { button } as MouseEvent,
+            pointerEvent: { pointerId: 1, pointerType: 'mouse', button } as PointerEvent,
+            primary: true,
             position: new Vector(x, y),
         },
     });
@@ -49,8 +50,8 @@ function keyEvent(key: string, modifiers: Partial<KeyboardEvent> = {}) {
 
 /** Clicks a canvas position with the main button through the UI of a layer. */
 function click(layer: Layer, x: number, y: number) {
-    layer.uiRenderer.dispatch('mouseDown', mouseEvent('mouseDown', x, y));
-    layer.uiRenderer.dispatch('mouseUp', mouseEvent('mouseUp', x, y));
+    layer.uiRenderer.dispatch('pointerDown', mouseEvent('pointerDown', x, y));
+    layer.uiRenderer.dispatch('pointerUp', mouseEvent('pointerUp', x, y));
 }
 
 /** Types keys in the focused element of a layer, returning whether each one was consumed. */
@@ -110,9 +111,9 @@ describe('Click-through elements', () => {
         const { layer } = createLayer(['container.overlay'], {
             '.overlay': { width: '100%', height: '100%', pointerEvents: 'none' },
         });
-        const move = mouseEvent('mouseMove', 50, 50);
+        const move = mouseEvent('pointerMove', 50, 50);
 
-        layer.uiRenderer.dispatch('mouseMove', move);
+        layer.uiRenderer.dispatch('pointerMove', move);
 
         expect(move.detail.consumed).toBe(false);
     });
@@ -419,14 +420,14 @@ describe('Hover', () => {
         });
         const fills: unknown[] = [];
         vi.mocked(context.fill).mockImplementation(() => fills.push(context.fillStyle));
-        layer.uiRenderer.dispatch('mouseMove', mouseEvent('mouseMove', 10, 10));
+        layer.uiRenderer.dispatch('pointerMove', mouseEvent('pointerMove', 10, 10));
         click(layer, 10, 10);
 
         layer.uiRenderer.render(context);
         expect(root.children[0].isFocused()).toBe(true);
         expect(fills.at(-1)).toBe('#ddd');
 
-        layer.uiRenderer.dispatch('mouseMove', mouseEvent('mouseMove', 300, 150));
+        layer.uiRenderer.dispatch('pointerMove', mouseEvent('pointerMove', 300, 150));
         layer.uiRenderer.render(context);
         expect(fills.at(-1)).toBe('#eee');
     });
@@ -434,14 +435,14 @@ describe('Hover', () => {
     test('is restored after the UI is rebuilt, until the mouse leaves the canvas', () => {
         const styles = { '.toggle': { width: 80, height: 20 } };
         const { layer, context } = createLayer(['button.toggle'], styles);
-        layer.uiRenderer.dispatch('mouseMove', mouseEvent('mouseMove', 10, 10));
+        layer.uiRenderer.dispatch('pointerMove', mouseEvent('pointerMove', 10, 10));
 
         const rebuilt = layer.uiRenderer.setUI(['button.toggle'], styles);
         expect(rebuilt.children[0].isHovered()).toBe(false);
         layer.uiRenderer.render(context);
         expect(rebuilt.children[0].isHovered()).toBe(true);
 
-        layer.dispatch('mouseOut', mouseEvent('mouseOut', 10, 10));
+        layer.dispatch('pointerLeave', mouseEvent('pointerLeave', 10, 10));
         expect(rebuilt.children[0].isHovered()).toBe(false);
         const again = layer.uiRenderer.setUI(['button.toggle'], styles);
         layer.uiRenderer.render(context);

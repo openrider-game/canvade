@@ -234,7 +234,7 @@ export abstract class UIElement<
      * Handles the main mouse button, or a touch, pressed over the element, at a position in UI
      * pixels.
      */
-    public handlePointerDown?(x: number, y: number, inputEvent: MouseEvent | TouchEvent): void;
+    public handlePointerDown?(x: number, y: number, inputEvent: MouseEvent): void;
 
     /**
      * Handles the mouse, or the touch, moving while the element is pressed, wherever it is, e.g.
@@ -334,7 +334,7 @@ export abstract class UIElement<
      *
      * @returns Whether the position is inside this element.
      */
-    public handleClick(x: number, y: number, inputEvent: MouseEvent | TouchEvent): boolean {
+    public handleClick(x: number, y: number, inputEvent: MouseEvent): boolean {
         return UIElementTree.handleClick(this, x, y, (target) =>
             target.dispatchClick(x, y, inputEvent),
         );
@@ -465,7 +465,7 @@ export abstract class UIElement<
         return this.propertyResolver.resolveValue(property, endpoint, this.layoutParentBounds);
     }
 
-    private dispatchClick(x: number, y: number, inputEvent: MouseEvent | TouchEvent): void {
+    private dispatchClick(x: number, y: number, inputEvent: MouseEvent): void {
         this.dispatch(
             'click',
             EventFactory.createGameEvent<GameClickEvent>({
