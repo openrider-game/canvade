@@ -156,7 +156,20 @@ describe('EventManager DOM bridge', () => {
         expect(canvas.addEventListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
         expect(canvas.addEventListener).toHaveBeenCalledWith('pointercancel', expect.any(Function));
         // The fingers reach the canvas instead of scrolling or zooming the page
-        expect(canvas.style.touchAction).toBe('none');
+        // Nor selecting it or opening the menu of a long press, as in iOS Safari
+        expect(canvas.style).toMatchObject({
+            touchAction: 'none',
+            userSelect: 'none',
+            webkitUserSelect: 'none',
+            webkitTouchCallout: 'none',
+        });
+        const touchStart = vi
+            .mocked(canvas.addEventListener)
+            .mock.calls.find(([name]) => name === 'touchstart');
+        expect(touchStart?.[2]).toEqual({ passive: false });
+        const touch = { preventDefault: vi.fn() };
+        (touchStart?.[1] as (e: typeof touch) => void)(touch);
+        expect(touch.preventDefault).toHaveBeenCalledOnce();
         expect(canvas.addEventListener).toHaveBeenCalledWith('wheel', expect.any(Function));
         expect(documentAddEventListener).toHaveBeenCalledWith(
             'visibilitychange',

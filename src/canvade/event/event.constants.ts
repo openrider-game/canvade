@@ -12,6 +12,8 @@ export const WHEEL_EVENT = 'wheel',
     POINTER_ENTER_EVENT = 'pointerenter',
     POINTER_LEAVE_EVENT = 'pointerleave',
     LOST_POINTER_CAPTURE_EVENT = 'lostpointercapture',
+    /** Only to keep the long presses of iOS Safari off the canvas, see `PointerBridge.listen`. */
+    TOUCH_START_EVENT = 'touchstart',
     VISIBILITY_CHANGE_EVENT = 'visibilitychange',
     BLUR_EVENT = 'blur',
     KEY_DOWN_EVENT = 'keydown',

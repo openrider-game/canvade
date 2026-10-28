@@ -9,6 +9,7 @@ import {
     POINTER_LEAVE_EVENT,
     POINTER_MOVE_EVENT,
     POINTER_UP_EVENT,
+    TOUCH_START_EVENT,
 } from '../event.constants';
 import { TouchGestures, TouchPoint } from '../touch/touch-gestures';
 import { GamePinchEvent, GamePointerEvent } from '../types/dom-events';
@@ -48,7 +49,7 @@ const BUTTON_BITS = [1, 4, 2, 8, 16];
  * its `pointerUp`, unless a layer consumes its `pointerDown`: it then leaves right away. The
  * fingers no layer consumes are gestures (see {@link TouchGestures}): a second one ends the
  * primary finger and both pinch. The fingers neither scroll nor zoom the page
- * (`touch-action: none`).
+ * (`touch-action: none`), nor select it, nor open the menu of a long press.
  */
 export class PointerBridge {
     /** Gestures of the fingers no layer took. */
@@ -80,7 +81,19 @@ export class PointerBridge {
     public listen(stateManager: StateManager): void {
         this.gestureTarget = stateManager;
         // The fingers neither scroll nor zoom the page, but reach the canvas
-        this.canvas.style.touchAction = 'none';
+        // Nor select the page or the canvas, nor open the menu of the image, on a long press: a
+        // finger held on a button would otherwise be cancelled by iOS Safari
+        Object.assign(this.canvas.style, {
+            touchAction: 'none',
+            userSelect: 'none',
+            webkitUserSelect: 'none',
+            webkitTouchCallout: 'none',
+        });
+        // Which iOS Safari only honors once the touches are cancelled too: the canvas follows the
+        // pointer events, not the touch events, nor the clicks Safari makes up from them
+        this.canvas.addEventListener(TOUCH_START_EVENT, (e) => e.preventDefault(), {
+            passive: false,
+        });
 
         const listen = (name: string, listener: (e: PointerEvent) => void) =>
             this.canvas.addEventListener(name, (e) => listener(e as PointerEvent));
