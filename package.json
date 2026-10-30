@@ -3,6 +3,20 @@
     "version": "0.0.0",
     "description": "Engine for canvas based browser games",
     "main": "dist/public-api.js",
+    "module": "dist/public-api.mjs",
+    "types": "dist/public-api.d.ts",
+    "exports": {
+        ".": {
+            "import": {
+                "types": "./dist/public-api.d.mts",
+                "default": "./dist/public-api.mjs"
+            },
+            "require": {
+                "types": "./dist/public-api.d.ts",
+                "default": "./dist/public-api.js"
+            }
+        }
+    },
     "author": "tomiy",
     "license": "GPL-3.0",
     "scripts": {
