@@ -62,7 +62,8 @@ It provides:
 - a declarative canvas UI: elements described by a structure and styled by CSS-like selectors, with
   relative units, alignment, absolute positioning, interaction states and animations, scaled to keep
   its size on high density screens
-- built-in UI elements: containers, buttons, texts, images and text inputs
+- built-in UI elements: containers, buttons, texts, images and text inputs, which open the keyboard
+  of the touch screens
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

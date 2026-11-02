@@ -1,6 +1,7 @@
 import { EventFactory } from '../../event/event-factory';
 import { GameValueEvent } from '../../event/types/ui-events';
 import { UIProperty } from '../properties/ui-property.type';
+import { SoftKeyboard, SoftKeyboardTarget } from '../soft-keyboard';
 import { UIElement, UIElementProperties } from '../ui-element';
 import { TextLayout } from './text-layout';
 import { TextSelection } from './text-selection';
@@ -64,10 +65,14 @@ const defaultUIInputProperties: UIInputProperties = {
  * Copying, cutting and pasting go through the clipboard events of the browser, fired by its usual
  * shortcuts: pasted text is inserted on one line, within `maxLength`.
  *
+ * Tapped with a finger or a pen, it opens the keyboard of the touch screen (see
+ * {@link SoftKeyboard}), the text typed there being copied to it: Enter then dispatches `submit`
+ * and closes the keyboard, which closes once it loses the focus too.
+ *
  * The value is the `value` property, which can be set from the styles or with
  * {@link UIInput.setValue}.
  */
-export class UIInput extends UIElement<UIInputProperties> {
+export class UIInput extends UIElement<UIInputProperties> implements SoftKeyboardTarget {
     private readonly selection = new TextSelection();
     private readonly layout = new TextLayout();
     /** Time since the caret last moved, in milliseconds, for the blinking. */
@@ -77,6 +82,7 @@ export class UIInput extends UIElement<UIInputProperties> {
         super(UI_INPUT_TYPE, classNames, { ...defaultUIInputProperties, ...properties });
 
         this.subscribe('focusIn', () => (this.blinkTime = 0));
+        this.subscribe('focusOut', () => SoftKeyboard.close(this));
     }
 
     /** Current value of the input. */
@@ -101,6 +107,36 @@ export class UIInput extends UIElement<UIInputProperties> {
 
     public get selectedText(): string {
         return this.selection.selectedText(this.value);
+    }
+
+    /** Number of characters at most, 0 for no limit. */
+    public get maxLength(): number {
+        return this.v('maxLength');
+    }
+
+    /**
+     * Takes the text typed with the keyboard of a touch screen (see {@link SoftKeyboard}), with
+     * its selection, dispatching `change` if the value changed.
+     */
+    public typeText(value: string, selectionStart: number, selectionEnd: number): void {
+        const maxLength = this.v('maxLength');
+        const text = (maxLength > 0 ? value.slice(0, maxLength) : value).replace(/\r?\n|\r/g, ' ');
+        const changed = text !== this.value;
+        this.p('value').setValue(text);
+        this.select(selectionStart, selectionEnd);
+        if (changed) {
+            this.dispatchValueEvent('change');
+        }
+    }
+
+    /** Dispatches `submit` with the value, as the Enter key does. */
+    public submit(): void {
+        this.dispatchValueEvent('submit');
+    }
+
+    /** Removes the focus of the input, as the Escape key does. */
+    public blur(): void {
+        this.updateInteractionState('focused', false);
     }
 
     /** Replaces the value, moving the caret to its end, without dispatching `change`. */
@@ -161,7 +197,7 @@ export class UIInput extends UIElement<UIInputProperties> {
                 this.dispatchValueEvent('submit');
                 break;
             case 'Escape':
-                this.updateInteractionState('focused', false);
+                this.blur();
                 break;
             default:
                 // Printable characters have a one character name, other keys are not handled
@@ -201,6 +237,19 @@ export class UIInput extends UIElement<UIInputProperties> {
             this.replaceSelection('');
         }
         return true;
+    }
+
+    /**
+     * Opens the keyboard of a touch screen once tapped with a finger or a pen: in the handler of
+     * the touch, as the browsers only open it during a gesture.
+     */
+    public override handleClick(x: number, y: number, inputEvent: MouseEvent): boolean {
+        const handled = super.handleClick(x, y, inputEvent);
+        const pointerType = (inputEvent as Partial<PointerEvent>).pointerType;
+        if (pointerType === 'touch' || pointerType === 'pen') {
+            SoftKeyboard.open(this);
+        }
+        return handled;
     }
 
     /** Moves the caret under the mouse, extending the selection when Shift is held. */

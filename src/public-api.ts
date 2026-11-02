@@ -45,6 +45,8 @@ export * from './canvade/ui/tree';
 
 export * from './canvade/ui/ui-manager';
 export * from './canvade/ui/ui-parser';
+export * from './canvade/ui/soft-keyboard';
+export { UI_FONT_FAMILY } from './canvade/ui/ui.constants';
 
 export * from './canvade/world/world';
 export * from './canvade/world/world-vector';
