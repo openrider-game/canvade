@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { DebugLevel, DebugUtils } from '../../src/canvade/debug.utils';
 import { Display } from '../../src/canvade/core/display';
 import { Game, GameOptions } from '../../src/canvade/game';
+import { MAX_FIXED_UPDATES_PER_FRAME } from '../../src/canvade/game.constants';
 import { Layer } from '../../src/canvade/state/layer/layer';
 import { State } from '../../src/canvade/state/state';
 import { createCanvasMock } from '../helpers/canvas';
@@ -84,6 +85,32 @@ describe('Game loop', () => {
 
         expect(fixedUpdate).toHaveBeenCalledTimes(2);
         expect(update.mock.calls[1][0].detail.delta).toBeCloseTo(game.frameDuration);
+    });
+
+    test('runs a few fixed updates at most in a slow frame, dropping the time behind', () => {
+        const fixedUpdate = vi.fn();
+        const update = vi.fn();
+
+        class LoopState extends State {
+            protected initState(): void {
+                this.subscribe('fixedUpdate', fixedUpdate);
+                this.subscribe('update', update);
+            }
+
+            protected initLayers(): Map<string, Layer> {
+                return new Map();
+            }
+        }
+
+        // 900 ms late: 27 fixed updates behind at 30 per second
+        const { game } = createGame(1, [1000, 1900]);
+        game.addStates(new Map([['loop', LoopState]]));
+        game.pushState('loop');
+
+        game.run();
+
+        expect(fixedUpdate).toHaveBeenCalledTimes(MAX_FIXED_UPDATES_PER_FRAME);
+        expect(update.mock.calls[0][0].detail.progress).toBe(0);
     });
 });
 

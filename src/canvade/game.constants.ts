@@ -1,5 +1,10 @@
 /** Canvas setup and game loop defaults of `Game`. */
 export const DEFAULT_UPDATES_PER_SECOND = 50,
+    /**
+     * Fixed updates run at most in a frame: past them, the time behind is dropped, the game
+     * slowing down rather than running ever longer frames to catch up, e.g. on a slow device.
+     */
+    MAX_FIXED_UPDATES_PER_FRAME = 5,
     /** Page opened when the browser does not support the canvas. */
     UNSUPPORTED_BROWSER_URL = 'https://browsehappy.com/',
     CANVAS_ELEMENT = 'canvas',

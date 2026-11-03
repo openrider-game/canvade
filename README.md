@@ -147,7 +147,9 @@ game.run();
 
 The game loop dispatches these events to the current state and its layers:
 
-- `fixedUpdate`, a fixed number of times per second (`updatesPerSecond`), for the physics
+- `fixedUpdate`, a fixed number of times per second (`updatesPerSecond`), for the physics; at most
+  `MAX_FIXED_UPDATES_PER_FRAME` (5) in a frame, the time behind being dropped when the frames take
+  longer, so that a slow device slows the game down rather than freezing
 - `update`, once per frame, with the `progress` towards the next fixed update and the elapsed
   `delta` in milliseconds, to interpolate the rendering between two fixed updates
 - `render`, once per frame, with the canvas context, after the canvas has been filled with the

@@ -10,6 +10,7 @@ import {
     DEFAULT_LINE_CAP,
     DEFAULT_LINE_JOIN,
     DEFAULT_UPDATES_PER_SECOND,
+    MAX_FIXED_UPDATES_PER_FRAME,
     RESIZE_EVENT,
     UNSUPPORTED_BROWSER_URL,
 } from './game.constants';
@@ -44,7 +45,8 @@ const defaultOptions = {
  * Each frame of the loop, the current state of the {@link StateManager} receives:
  * - `fixedUpdate` zero or more times, so that it runs exactly
  *   {@link GameOptions.updatesPerSecond} times per second whatever the frame rate: put the game
- *   logic and physics there;
+ *   logic and physics there. At most {@link MAX_FIXED_UPDATES_PER_FRAME} run in a frame, the
+ *   time behind being dropped when the frames take longer;
  * - `update` once, with the progress towards the next fixed update and the frame duration, to
  *   interpolate between fixed updates and run time-based animations;
  * - `render` once, with the canvas context.
@@ -173,7 +175,11 @@ export class Game {
             delta = this.frameDuration;
         }
 
-        this.progress += delta / this.frameDuration;
+        // The time the game cannot catch up is dropped, rather than running ever longer frames
+        this.progress = Math.min(
+            this.progress + delta / this.frameDuration,
+            MAX_FIXED_UPDATES_PER_FRAME,
+        );
         this.lastTime = now;
 
         while (this.progress >= 1) {
