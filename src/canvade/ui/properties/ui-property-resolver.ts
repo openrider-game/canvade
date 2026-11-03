@@ -3,7 +3,31 @@ import { UIPropertyMap, UIResolvableProperty, UIResolvableUnit } from './ui-prop
 
 /** Resolves the `px`/`%` properties of a UI element against the bounds given by its parent. */
 export class UIPropertyResolver<P extends UIPropertyMap> {
-    constructor(private readonly properties: P) {}
+    /** Current values of the running resolution, read by {@link context}. */
+    private currentValue: ((propertyName: string) => number | undefined) | undefined;
+    /**
+     * Context of the resolutions, made once: an element resolves its properties on every frame.
+     * Each resolution gives it its bounds, and it reads the current values of that resolution.
+     */
+    private readonly context: UIPropertyResolutionContext;
+
+    constructor(private readonly properties: P) {
+        this.context = {
+            parentBounds: { x: 0, y: 0, width: 0, height: 0 },
+            getValue: (name) => this.dependency(name).getValue(),
+            resolveProperty: (name) => {
+                const current = this.currentValue?.(name);
+                if (current !== undefined) {
+                    return current;
+                }
+                const property = this.properties[name];
+                if (!(property instanceof UIResolvableProperty)) {
+                    throw new Error(`Cannot resolve UI property with unknown dependency "${name}"`);
+                }
+                return property.resolve(this.context);
+            },
+        };
+    }
 
     /**
      * Resolves every `px`/`%` property and stores its value in pixels.
@@ -18,11 +42,18 @@ export class UIPropertyResolver<P extends UIPropertyMap> {
         bounds: UIPropertyBounds,
         currentValue?: (propertyName: string) => number | undefined,
     ): void {
-        const context = this.createContext(bounds, currentValue);
-        for (const property of Object.values(this.properties)) {
-            if (property instanceof UIResolvableProperty) {
-                property.setValue(property.resolve(context));
+        this.context.parentBounds = bounds;
+        this.currentValue = currentValue;
+        try {
+            // Without listing the properties in an array on every frame
+            for (const name in this.properties) {
+                const property = this.properties[name];
+                if (property instanceof UIResolvableProperty) {
+                    property.setValue(property.resolve(this.context));
+                }
             }
+        } finally {
+            this.currentValue = undefined;
         }
     }
 
@@ -43,6 +74,15 @@ export class UIPropertyResolver<P extends UIPropertyMap> {
         }
 
         return property.resolveValue(value, this.createContext(bounds));
+    }
+
+    /** A property another one depends on. */
+    private dependency(name: string): UIPropertyMap[string] {
+        const property = this.properties[name];
+        if (!property) {
+            throw new Error(`Cannot resolve UI property with unknown dependency "${name}"`);
+        }
+        return property;
     }
 
     private createContext(

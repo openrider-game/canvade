@@ -93,6 +93,7 @@ export class Game {
         hostElement.addEventListener(RESIZE_EVENT, () => this.setCanvasSize());
         window.addEventListener(RESIZE_EVENT, () => this.setCanvasSize());
         this.setCanvasSize();
+        this.watchPixelRatio();
 
         const mergedOptions = { ...defaultOptions, ...options };
         Display.fixedUIScale = mergedOptions.uiScale ?? null;
@@ -112,15 +113,42 @@ export class Game {
         this.postInit(mergedOptions);
     }
 
-    /** Sizes the canvas in device pixels, so that it stays sharp on high density screens. */
+    /**
+     * Sizes the canvas in device pixels, so that it stays sharp on high density screens. Left as
+     * it is when its size did not change, e.g. on the many resize events of a window dragged:
+     * sizing a canvas clears it and resets its context.
+     */
     private setCanvasSize() {
         const devicePixelRatio = window.devicePixelRatio || 1;
         Display.pixelRatio = devicePixelRatio;
 
-        this.canvas.width = this.canvas.parentElement!.clientWidth * devicePixelRatio;
-        this.canvas.height = this.canvas.parentElement!.clientHeight * devicePixelRatio;
+        const width = this.canvas.parentElement!.clientWidth * devicePixelRatio;
+        const height = this.canvas.parentElement!.clientHeight * devicePixelRatio;
+        if (this.canvas.width === width && this.canvas.height === height) {
+            return;
+        }
+        this.canvas.width = width;
+        this.canvas.height = height;
 
         this.setContextProperties(this.ctx);
+    }
+
+    /**
+     * Sizes the canvas again once the pixel ratio changes, e.g. the window moved to a screen of
+     * another density, which does not always resize the window. Without `matchMedia`, only the
+     * resize events size it.
+     */
+    private watchPixelRatio(): void {
+        const query = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+        query?.addEventListener?.(
+            'change',
+            () => {
+                this.setCanvasSize();
+                // A query for the new ratio
+                this.watchPixelRatio();
+            },
+            { once: true },
+        );
     }
 
     private setContextProperties(ctx: CanvasRenderingContext2D) {

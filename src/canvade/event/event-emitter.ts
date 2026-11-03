@@ -1,5 +1,8 @@
 import { Emitter, EventKey, EventMap, EventReceiver } from './emitter.interface';
 
+/** Last id given to a subscription, see {@link EventEmitter.subscribe}. */
+let lastSubscriptionId = 0;
+
 /**
  * Base {@link Emitter} implementation, extended by states, layers, UI managers and UI elements.
  *
@@ -17,7 +20,8 @@ export class EventEmitter<T extends EventMap> implements Emitter<T> {
             this.events[eventName] = new Map();
         }
 
-        const id = crypto.randomUUID();
+        // Unique among every emitter: a rebuilt UI subscribes thousands of receivers at once
+        const id = String(++lastSubscriptionId);
 
         this.events[eventName].set(id, fn);
 
@@ -32,6 +36,11 @@ export class EventEmitter<T extends EventMap> implements Emitter<T> {
         this.events[eventName].delete(id);
 
         return true;
+    }
+
+    /** Whether an event has receivers, e.g. to skip building it on every frame without any. */
+    public hasReceivers<K extends EventKey<T>>(eventName: K): boolean {
+        return (this.events[eventName]?.size ?? 0) > 0;
     }
 
     /** Calls the receivers of an event synchronously, in subscription order. */

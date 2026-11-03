@@ -13,6 +13,10 @@ export class UIElementTree {
         ctx: CanvasRenderingContext2D,
         parentBounds: { x: number; y: number; width: number; height: number },
     ): void {
+        // Nothing to clip: most elements are leaves, and a clip on every frame costs
+        if (children.length === 0) {
+            return;
+        }
         ctx.save();
         ctx.beginPath();
         ctx.rect(parentBounds.x, parentBounds.y, parentBounds.width, parentBounds.height);

@@ -140,24 +140,49 @@ export class ContainerPaddingRule implements UIPropertyResolutionRule {
  * @throws When the value is not a finite number followed by `px` or `%`.
  */
 export function resolveUIUnit(value: UIResolvableUnit, reference: number): number {
+    let unit = parsedUnits.get(value);
+    if (unit === undefined) {
+        unit = parseUnit(value);
+        // Bounded, e.g. for units computed on every frame
+        if (parsedUnits.size >= MAX_PARSED_UNITS) {
+            parsedUnits.clear();
+        }
+        parsedUnits.set(value, unit);
+    }
+
+    if (unit === null) {
+        throw new Error(`Invalid UI unit: ${value}`);
+    }
+    return unit.percentage ? (unit.amount / 100) * reference : unit.amount;
+}
+
+/** A unit read by {@link parseUnit}: its number, and whether it is a percentage. */
+interface ParsedUnit {
+    amount: number;
+    percentage: boolean;
+}
+
+/**
+ * Units already read, by their text: the elements resolve their units on every frame, from a few
+ * texts. Null for an invalid one.
+ */
+const parsedUnits = new Map<string, ParsedUnit | null>();
+/** Texts of units kept by {@link parsedUnits}, past which it starts again. */
+const MAX_PARSED_UNITS = 4096;
+
+/** Reads a `px` or `%` unit, null when invalid. */
+function parseUnit(value: string): ParsedUnit | null {
     switch (true) {
         case value.endsWith(UI_PIXEL_UNIT): {
             const amount = parseUnitAmount(value, UI_PIXEL_UNIT);
-            if (amount !== null) {
-                return amount;
-            }
-            break;
+            return amount === null ? null : { amount, percentage: false };
         }
         case value.endsWith(UI_PERCENTAGE_UNIT): {
             const amount = parseUnitAmount(value, UI_PERCENTAGE_UNIT);
-            if (amount !== null) {
-                return (amount / 100) * reference;
-            }
-            break;
+            return amount === null ? null : { amount, percentage: true };
         }
     }
-
-    throw new Error(`Invalid UI unit: ${value}`);
+    return null;
 }
 
 /** Reads the number before the unit, `null` if it is missing or not a finite number. */

@@ -151,14 +151,17 @@ export abstract class UIElement<
         );
         this.renderElement(ctx);
         this.renderChildren(ctx, this.getBounds());
-        this.dispatch(
-            'renderTree',
-            EventFactory.createGameEvent({
-                name: 'renderTree',
-                consumed: false,
-                ctx,
-            }),
-        );
+        // Built only when received: the elements render on every frame
+        if (this.hasReceivers('renderTree')) {
+            this.dispatch(
+                'renderTree',
+                EventFactory.createGameEvent({
+                    name: 'renderTree',
+                    consumed: false,
+                    ctx,
+                }),
+            );
+        }
     }
 
     /** Draws the element itself, once its layout is resolved. */
